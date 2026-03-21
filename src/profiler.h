@@ -109,8 +109,10 @@ void print_elapsed_time(u64 total_clocks, u64 timer_freq,
         f64 bytes_per_second = (f64)anchor->processed_byte_count / seconds;
         f64 megabytes = (f64)anchor->processed_byte_count / (f64)megabyte;
         f64 gigabytes_per_second = bytes_per_second / gigabyte;
+        f64 megabytes_per_second = bytes_per_second / megabyte;
 
-        printf("  %.3fmb at %.2fgb/s", megabytes, gigabytes_per_second);
+        // printf("  %.3fmb at %.2fgb/s", megabytes, gigabytes_per_second);
+        printf("  %.3fmb at %.2fmb/s", megabytes, megabytes_per_second);
     }
 
     printf(")\n");

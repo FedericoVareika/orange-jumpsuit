@@ -1,0 +1,63 @@
+*** with -O3:
+
+Total time: 11.293238 (Cpu freq: 1000000000)
+  index_pq_init[1]: 94 (0.00%)
+  oj__get_closest_centroid[3590000]: 10363092418 (91.76%)
+  oj__get_clusters[351]: 99517520 (0.88%, 90.59% w/children)
+  oj__update_centroids[351]: 3401663 (0.03%)
+  Initialize centroids[8]: 659966405 (5.84%)
+  Kmeans calculate centroids[8]: 415070 (0.00%, 90.62% w/children)
+  index_pq_train[1]: 32901 (0.00%, 96.47% w/children  4.883mb at 0.45mb/s)
+  index_pq_add[1]: 2178745 (0.02%, 2.08% w/children)
+
+*** with common_flags_internal:  
+
+Total time: 15.151009 (Cpu freq: 1000000000)
+  index_pq_init[1]: 105 (0.00%)
+  oj__get_closest_centroid[3590000]: 13944731008 (92.04%)
+  oj__get_clusters[351]: 159654005 (1.05%, 91.05% w/children)
+  oj__update_centroids[351]: 3393294 (0.02%)
+  Initialize centroids[8]: 851222018 (5.62%)
+  Kmeans calculate centroids[8]: 932606 (0.01%, 91.08% w/children)
+  index_pq_train[1]: 37758 (0.00%, 96.70% w/children  4.883mb at 0.33mb/s)
+  index_pq_add[1]: 2691395 (0.02%, 2.06% w/children)
+
+
+*** perf col major: 
+
+ Performance counter stats for './build/orange-jumpsuit':
+
+                 0      context-switches:u               #      0.0 cs/sec  cs_per_second
+                 0      cpu-migrations:u                 #      0.0 migrations/sec  migrations_per_second
+             2,742      page-faults:u                    #    309.9 faults/sec  page_faults_per_second
+          8,848.57 msec task-clock:u                     #      1.0 CPUs  CPUs_utilized
+        13,777,448      branch-misses:u                  #      0.1 %  branch_miss_rate         (50.00%)
+    14,373,255,911      branches:u                       #   1624.4 M/sec  branch_frequency     (50.00%)
+    27,119,936,456      cpu-cycles:u                     #      3.1 GHz  cycles_frequency       (50.00%)
+    91,197,812,207      instructions:u                   #      3.4 instructions  insn_per_cycle  (50.00%)
+
+       8.850663499 seconds time elapsed
+
+       8.782047000 seconds user
+       0.008828000 seconds sys
+
+*** perf row major:
+
+ Performance counter stats for './build/orange-jumpsuit':
+
+                 0      context-switches:u               #      0.0 cs/sec  cs_per_second
+                 0      cpu-migrations:u                 #      0.0 migrations/sec  migrations_per_second
+             1,494      page-faults:u                    #    159.6 faults/sec  page_faults_per_second
+          9,362.98 msec task-clock:u                     #      1.0 CPUs  CPUs_utilized
+        13,573,910      branch-misses:u                  #      0.1 %  branch_miss_rate         (49.99%)
+    14,406,857,598      branches:u                       #   1538.7 M/sec  branch_frequency     (50.00%)
+    28,664,064,855      cpu-cycles:u                     #      3.1 GHz  cycles_frequency       (49.99%)
+    89,323,204,492      instructions:u                   #      3.1 instructions  insn_per_cycle  (50.01%)
+
+       9.365587510 seconds time elapsed
+
+       9.286574000 seconds user
+       0.003953000 seconds sys
+
+
+

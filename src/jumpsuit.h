@@ -60,6 +60,8 @@ typedef struct {
     int n_subvectors;           // = m
     int n_bits_per_value;       // = log_2(k*)
 
+    int n_iter;
+
     ////////////////////////////////////////////////////
     // Calculated automatically based on init params:
     
@@ -85,10 +87,18 @@ typedef struct {
 IndexPQ index_pq_init(int dimension, int n_subvectors, int n_bits_per_value);
 
 // TODO(fede): this will allocate memory, pass arena to it.
-void index_pq_train(IndexPQ *index, float *vectors, int n_vectors);
+void index_pq_train(
+        IndexPQ *index,
+        float *vectors,
+        int n_vectors,
+        bool row_major);
 
 // TODO(fede): this will allocate memory, pass arena to it.
-void index_pq_add(IndexPQ *index, float *vectors, int n_vectors);
+void index_pq_add(
+        IndexPQ *index,
+        float *vectors,
+        int n_vectors,
+        bool row_major);
 
 typedef struct {
     int n_vectors;
@@ -117,10 +127,18 @@ IndexPQ index_pq_init(int dimension, int n_subvectors, int n_bits_per_value) {
         .dimension = dimension,
         .n_subvectors = n_subvectors,
         .n_bits_per_value = n_bits_per_value,
+        .n_iter = 25,
         .subvector_dimension = dimension / n_subvectors,
         .centroids_per_page = 1 << n_bits_per_value,
     };
 }
+
+#define oj__clear_array(a, n, v)                                               \
+    do {                                                                       \
+        for (int __i = 0; __i < (n); __i++) {                                  \
+            (a)[__i] = (v);                                                    \
+        }                                                                      \
+    } while (0)
 
 internal float oj__vector_distance2(float *vec1, float *vec2, int dim) {
     float distance2 = 0;
@@ -167,12 +185,13 @@ typedef struct {
     float *vecs; 
     int dim; 
     int n; 
+    bool row_major;
 
     int subvectors_per_vector;
     int subvector_index;
 } Subvectors;
 
-internal float *oj__get_subvector(Subvectors subvectors, int index) {
+internal float *oj__get_subvector_rm(Subvectors subvectors, int index) {
     int adjusted_index = 
         subvectors.subvector_index +
         index * subvectors.subvectors_per_vector;
@@ -182,8 +201,8 @@ internal float *oj__get_subvector(Subvectors subvectors, int index) {
     return &subvectors.vecs[global_float_index];
 }
 
-internal float *oj__get_random_subvector(Subvectors subvectors) {
-    return oj__get_subvector(subvectors, oj__randi(0, subvectors.n));
+internal float *oj__get_random_subvector_rm(Subvectors subvectors) {
+    return oj__get_subvector_rm(subvectors, oj__randi(0, subvectors.n));
 }
 
 // NOTE(fede): This lead to bad results, ended up using kmeans++ instead
@@ -209,7 +228,7 @@ internal void oj__get_random_centroids(
 
         centroid_init_idxs[i] = rand_idx;
 
-        float *rand_vector = oj__get_subvector(subvectors, rand_idx);
+        float *rand_vector = oj__get_subvector_rm(subvectors, rand_idx);
         oj__vector_copy(
                 rand_vector,
                 &centroids[i * subvectors.dim],
@@ -227,6 +246,51 @@ internal int oj__random_from_cumsum(float *cumsum, int n) {
     return i;
 }
 
+internal int oj__get_subvector_row_cm(Subvectors subvectors) {
+    assert(!subvectors.row_major);
+    return subvectors.subvector_index * subvectors.dim;
+}
+
+/* v[row][col] where row = [1..dim], col = [1..n_vecs] 
+ *
+ * subvector: 
+ *
+ * [ v[1][1], v[2][1], ...,   v[index][1]   , ..., v[n_vecs][ 1 ],
+ *   ...
+ *   ...
+ *   ...                    ---------------                     
+ *   v[1][a], v[2][a], ..., | v[index][a] | , ..., v[n_vecs][ a ], |
+ *   ...                    |    ...      |                        |-> subvector_dim
+ *   v[1][b], v[2][b], ..., | v[index][b] | , ..., v[n_vecs][ b ], |
+ *   ...                    ---------------
+ *   ...                           ^
+ *   ...                       subvector
+ *   ...
+ *   v[1][n], v[2][n], ...,   v[index][n]   , ..., v[n_vecs][dim] ]
+ *
+ *   a = row_idx = subvectors.subvector_index * subvectors.dim
+ *   b = a + (subvectors.dim - 1)
+ *   index = i * subvectors.dim
+ */
+internal void oj__get_subvector_cm(
+        Subvectors subvectors,
+        int i, float *dest) {
+    assert(!subvectors.row_major);
+
+    int row_idx = oj__get_subvector_row_cm(subvectors);
+    for (int j = 0; j < subvectors.dim; j++) {
+        int value_idx = (row_idx + j) * subvectors.n + i;
+
+        dest[j] = subvectors.vecs[value_idx];
+    }
+}
+
+internal void oj__get_random_subvector_cm(Subvectors subvectors, float *dest) {
+    assert(!subvectors.row_major);
+    int i = oj__randi(0, subvectors.n); 
+    oj__get_subvector_cm(subvectors, i, dest);
+}
+
 // NOTE(fede): 
 //  Kmeans++ algorithm based on FAISS implementation:
 //  https://github.com/facebookresearch/faiss/blob/main/faiss/impl/ClusteringInitialization.cpp#L197
@@ -235,52 +299,106 @@ internal int oj__random_from_cumsum(float *cumsum, int n) {
 internal void oj__kmeans_plus_plus_init(
         float *centroids,
         int n_centroids,
-        Subvectors subvectors) {
-    oj__vector_copy(
-            oj__get_random_subvector(subvectors), 
-            &centroids[0],
-            subvectors.dim);
-    
-    float *min_distances2, *cumsum;
-    {
-        float *block = malloc(sizeof(float) * subvectors.n * 2);
-        assert(block);
+        Subvectors subvectors,
+        float *min_distances2) {
+    if (!subvectors.row_major) {
+        oj__get_random_subvector_cm(subvectors, &centroids[0]);
 
-        min_distances2 = block;
-        cumsum = &block[subvectors.n];
-    }
+        float *cumsum = malloc(sizeof(float) * subvectors.n);
+        assert(cumsum);
 
-    for (int i = 0; i < subvectors.n; i++) {
-        min_distances2[i] = oj__vector_distance2(
-                &centroids[0],
-                oj__get_subvector(subvectors, i),
-                subvectors.dim);
-    }
+        oj__clear_array(min_distances2, subvectors.n, 0);
 
+        int row = oj__get_subvector_row_cm(subvectors);
 
-    for (int c = 1; c < n_centroids; c++) {
-        cumsum[0] = min_distances2[0];
-        for (int i = 1; i < subvectors.n; i++) {
-            cumsum[i] = cumsum[i - 1] + min_distances2[i];
+        {
+            float *centroid = &centroids[0];
+
+            for (int j = 0; j < subvectors.dim; j++) {
+                int row_idx = (row + j) * subvectors.n;
+                float *values_row = &subvectors.vecs[row_idx];
+
+                for (int i = 0; i < subvectors.n; i++) { 
+                    float delta = centroid[j] - values_row[i];
+                    min_distances2[i] += delta * delta;
+                }
+            }
         }
 
-        int new_c = oj__random_from_cumsum(cumsum, subvectors.n);
+        for (int c = 1; c < n_centroids; c++) {
+            cumsum[0] = min_distances2[0];
+            for (int i = 1; i < subvectors.n; i++) {
+                cumsum[i] = cumsum[i - 1] + min_distances2[i];
+            }
 
-        oj__vector_copy(oj__get_subvector(subvectors, new_c),
-                &centroids[c * subvectors.dim], subvectors.dim);
+            float *centroid = &centroids[c * subvectors.dim];
+            int new_c = oj__random_from_cumsum(cumsum, subvectors.n);
+
+            oj__get_subvector_cm(
+                    subvectors,
+                    new_c,
+                    centroid);
+
+            // STUDY(fede): this is accessing the entire subvector each loop, 
+            //      this will probably cause page faults, check.
+            for (int i = 0; i < subvectors.n; i++) {
+                float centroid_distance2 = 0;
+                for (int j = 0; j < subvectors.dim; j++) {
+                    int row_idx = (row + j) * subvectors.n;
+                    float value = subvectors.vecs[row_idx + i];
+
+                    float delta = centroid[j] - value; 
+                    centroid_distance2 += delta * delta;
+                }
+
+                min_distances2[i] = min(centroid_distance2, min_distances2[i]);
+            }
+        }
+
+        free(cumsum);
+
+    } else {
+        oj__vector_copy(
+                oj__get_random_subvector_rm(subvectors), 
+                &centroids[0],
+                subvectors.dim);
+
+        float *cumsum = malloc(sizeof(float) * subvectors.n);
+        assert(cumsum);
 
         for (int i = 0; i < subvectors.n; i++) {
-            float centroid_distance2 = 
-                oj__vector_distance2(
-                    &centroids[c],
-                    oj__get_subvector(subvectors, i),
+            min_distances2[i] = oj__vector_distance2(
+                    &centroids[0],
+                    oj__get_subvector_rm(subvectors, i),
                     subvectors.dim);
-
-            min_distances2[i] = min(centroid_distance2, min_distances2[i]);
         }
+
+
+        for (int c = 1; c < n_centroids; c++) {
+            cumsum[0] = min_distances2[0];
+            for (int i = 1; i < subvectors.n; i++) {
+                cumsum[i] = cumsum[i - 1] + min_distances2[i];
+            }
+
+            int new_c = oj__random_from_cumsum(cumsum, subvectors.n);
+
+            oj__vector_copy(oj__get_subvector_rm(subvectors, new_c),
+                    &centroids[c * subvectors.dim], subvectors.dim);
+
+            for (int i = 0; i < subvectors.n; i++) {
+                float centroid_distance2 = 
+                    oj__vector_distance2(
+                            // &centroids[c], // TODO(fede): check if its ok 
+                            &centroids[c * subvectors.dim],
+                            oj__get_subvector_rm(subvectors, i),
+                            subvectors.dim);
+
+                min_distances2[i] = min(centroid_distance2, min_distances2[i]);
+            }
+        }
+
+        free(cumsum);
     }
-    
-    free(min_distances2);
 }
 
 internal int oj__get_closest_centroid(
@@ -288,6 +406,8 @@ internal int oj__get_closest_centroid(
         int dim, 
         float *centroids,
         int n_centroids) {
+    timeFunction;
+
     float min_d2 = -1;
     int min_d2_centroid_idx = 0;
     int centroid_idx = 0;
@@ -313,10 +433,23 @@ internal void oj__get_clusters(
         float *centroids,
         int n_centroids,
         float *cluster_vector_sums,
-        int *cluster_amount) {
+        int *cluster_amount,
+        float *min_distances2) {
+    timeFunction;
+
+    float *vec = 0;
+    if (!subvectors.row_major) {
+        vec = malloc(sizeof(float) * subvectors.dim);
+        assert(vec);
+    }
 
     for (int vec_idx = 0; vec_idx < subvectors.n; vec_idx++) {
-        float *vec = oj__get_subvector(subvectors, vec_idx);
+        if (subvectors.row_major) {
+            vec = oj__get_subvector_rm(subvectors, vec_idx);
+        } else {
+            assert(vec);
+            oj__get_subvector_cm(subvectors, vec_idx, vec);
+        }
 
         int closest_centroid_idx = oj__get_closest_centroid(
                 vec,
@@ -332,6 +465,10 @@ internal void oj__get_clusters(
         oj__add_vectors(cluster_sum, vec, subvectors.dim, cluster_sum);
         cluster_amount[closest_centroid_idx]++;
     }
+
+    if (!subvectors.row_major) {
+        free(vec);
+    }
 }
 
 internal void oj__update_centroids(
@@ -341,6 +478,8 @@ internal void oj__update_centroids(
         float *cluster_vector_sums,
         int *cluster_amount,
         bool *should_stop) {
+    timeFunction;
+
     // TODO(fede): parametize this
     const float epsilon = 0.00001;
     *should_stop = true;
@@ -349,28 +488,29 @@ internal void oj__update_centroids(
         float *centroid = oj__get_vector(centroids, subvectors.dim, i);
 
         if (cluster_amount[i] > 0) {
-            float *sum = oj__get_vector(cluster_vector_sums, subvectors.dim, i);
+            float *new_centroid = oj__get_vector(cluster_vector_sums, subvectors.dim, i);
 
-            oj__vector_div(sum, subvectors.dim, cluster_amount[i], sum);
-            if (oj__vector_distance2(centroid, sum, subvectors.dim) > epsilon) {
+            oj__vector_div(
+                    new_centroid,
+                    subvectors.dim,
+                    cluster_amount[i],
+                    new_centroid);
+
+            if (oj__vector_distance2(
+                        centroid,
+                        new_centroid,
+                        subvectors.dim) > epsilon) {
                 *should_stop = false;
             }
 
-            oj__vector_copy(sum, centroid, subvectors.dim);
+            oj__vector_copy(new_centroid, centroid, subvectors.dim);
         } else {
             *should_stop = false;
-            float *new_centroid = oj__get_random_subvector(subvectors);
+            float *new_centroid = oj__get_random_subvector_rm(subvectors);
             oj__vector_copy(new_centroid, centroid, subvectors.dim);
         }
     }
 }
-
-#define oj__clear_array(a, n, v)                                               \
-    do {                                                                       \
-        for (int __i = 0; __i < (n); __i++) {                                  \
-            (a)[__i] = (v);                                                    \
-        }                                                                      \
-    } while (0)
 
 // TODO(fede): this will allocate memory, pass arena to it.
 // NOTE(fede): 
@@ -381,45 +521,58 @@ internal void oj__get_kmeans_cluster_centroids(
         int n_centroids,
         int max_iterations,
         float *cluster_vector_sums,
-        int *cluster_amount) {
+        int *cluster_amount,
+        float *subvector_min_distances2) {
     assert(cluster_vector_sums);
 
     srand(07734); // hello
 
     {
+        timeBlock("Initialize centroids");
+
         oj__clear_array(cluster_amount, n_centroids, 0);
         int *centroid_init_idxs = cluster_amount;
-        // oj__get_random_centroids(
-        //         centroids, n_centroids, vectors, centroid_init_idxs);
-        oj__kmeans_plus_plus_init(centroids, n_centroids, subvectors);
+        oj__kmeans_plus_plus_init(
+                centroids,
+                n_centroids,
+                subvectors,
+                subvector_min_distances2);
     }
 
     bool should_stop = false;
 
-    for (int i = 0; !should_stop && i < max_iterations; i++) {
-        oj__clear_array(cluster_vector_sums, n_centroids * subvectors.dim, 0);
-        oj__clear_array(cluster_amount, n_centroids, 0);
+    {
+        timeBlock("Kmeans calculate centroids");
+        for (int i = 0; !should_stop && i < max_iterations; i++) {
+            oj__clear_array(cluster_vector_sums, n_centroids * subvectors.dim, 0);
+            oj__clear_array(cluster_amount, n_centroids, 0);
 
-        oj__get_clusters(
-                subvectors,
-                centroids,
-                n_centroids,
-                cluster_vector_sums,
-                cluster_amount);
+            oj__get_clusters(
+                    subvectors,
+                    centroids,
+                    n_centroids,
+                    cluster_vector_sums,
+                    cluster_amount,
+                    subvector_min_distances2);
 
-        oj__update_centroids(
-                subvectors,
-                centroids,
-                n_centroids,
-                cluster_vector_sums,
-                cluster_amount,
-                &should_stop);
+            oj__update_centroids(
+                    subvectors,
+                    centroids,
+                    n_centroids,
+                    cluster_vector_sums,
+                    cluster_amount,
+                    &should_stop);
+        }
     }
 }
 
 // TODO(fede): this will allocate memory, pass arena to it.
-void index_pq_train(IndexPQ *index, float *vectors, int n_vectors) {
-    timeFunction;
+void index_pq_train(
+        IndexPQ *index,
+        float *vectors,
+        int n_vectors,
+        bool row_major) {
+    timeBandwidth(__func__, n_vectors * index->dimension * sizeof(float));
 
     //            (C_i = [c_1, c_2, ..., c_k*])
     // codebook = [C_1, C_2, ..., C_m]
@@ -442,6 +595,7 @@ void index_pq_train(IndexPQ *index, float *vectors, int n_vectors) {
         .dim = index->subvector_dimension, 
         .subvector_index = 0, 
         .subvectors_per_vector = index->n_subvectors,
+        .row_major = row_major,
     };
 
     float *prealloced_cluster_vector_sums = 
@@ -452,25 +606,22 @@ void index_pq_train(IndexPQ *index, float *vectors, int n_vectors) {
             index->centroids_per_page * sizeof(int));
     assert(prealloced_cluster_amount);
 
+    float *preallocated_subvector_distances2 = malloc(
+            subvectors.n * sizeof(float));
+    assert(preallocated_subvector_distances2);
+
     for (int i = 0; i < index->n_subvectors; i++) {
         float *centroids = &index->codebook[
             i * index->centroids_per_page * index->subvector_dimension];
-
-        // VectorsInput vectors_kmeans_input = {
-        //     .vecs = vectors,
-        //     .n = n_vectors,
-        //     .dim = index->subvector_dimension, 
-        //     .vector_offset = i,
-        //     .vector_pitch = index->n_subvectors,
-        // };
 
         oj__get_kmeans_cluster_centroids(
                 subvectors,
                 centroids,
                 index->centroids_per_page,
-                100,
+                index->n_iter,
                 prealloced_cluster_vector_sums,
-                prealloced_cluster_amount);
+                prealloced_cluster_amount,
+                preallocated_subvector_distances2);
 
         subvectors.subvector_index++;
     }
@@ -487,7 +638,7 @@ internal void oj__set_vector_codes(
 
     int code_pos = subvectors.subvector_index;
     for (int i = 0; i < subvectors.n; i++) {
-        float *vec = oj__get_subvector(subvectors, i);
+        float *vec = oj__get_subvector_rm(subvectors, i);
 
         int closest_centroid_idx = oj__get_closest_centroid(
                 vec, subvectors.dim, centroids, n_centroids);
@@ -496,27 +647,14 @@ internal void oj__set_vector_codes(
 
         code_pos += subvectors.subvectors_per_vector;
     }
-
-    /*
-    int vec_pos = subvectors.subvector_index * subvectors.dim;
-    int code_pos = subvectors.subvector_index;
-
-    while (code_pos < subvectors.n * subvectors.dim) {
-        float *vec = &subvectors.vecs[vec_pos];
-
-        int closest_centroid_idx =
-            oj__get_closest_centroid(vec, subvectors.dim, centroids, n_centroids);
-
-        quantized_codes[code_pos] = closest_centroid_idx;
-
-        vec_pos += subvectors.subvectors_per_vector * subvectors.dim;
-        code_pos += subvectors.subvectors_per_vector;
-    }
-    */
 }
 
 // TODO(fede): this will allocate memory, pass arena to it.
-void index_pq_add(IndexPQ *index, float *vectors, int n_vectors) {
+void index_pq_add(
+        IndexPQ *index,
+        float *vectors,
+        int n_vectors,
+        bool row_major) {
     timeFunction;
 
     // TODO(fede): allow multiple adds
@@ -529,23 +667,57 @@ void index_pq_add(IndexPQ *index, float *vectors, int n_vectors) {
 
     assert(index->quantized_codes);
 
-    for (int i = 0; i < n_vectors; i++) {
-        float *vector = &vectors[i * index->dimension];
-        int *vector_codes = &index->quantized_codes[i * index->n_subvectors];
+    if (!row_major) {
+        float *subvector = malloc(sizeof(float) * index->subvector_dimension);
+
+        Subvectors subvectors = {
+            .vecs = vectors,
+            .dim = index->subvector_dimension,
+            .n = n_vectors,
+            .subvector_index = 0,
+            .subvectors_per_vector = index->n_subvectors,
+            .row_major = row_major,
+        };
 
         for (int j = 0; j < index->n_subvectors; j++) {
-            float *subvector = &vector[j * index->subvector_dimension];
-
             float *centroids = &index->codebook[
                 j * index->subvector_dimension * index->centroids_per_page];
-    
-            int code = oj__get_closest_centroid(
-                    subvector,
-                    index->subvector_dimension,
-                    centroids,
-                    index->centroids_per_page);
 
-            vector_codes[j] = code;
+            for (int i = 0; i < n_vectors; i++) {
+                oj__get_subvector_cm(subvectors, i, subvector);
+
+                int code = oj__get_closest_centroid(
+                        subvector,
+                        subvectors.dim,
+                        centroids, 
+                        index->centroids_per_page);
+
+                index->quantized_codes[i * index->n_subvectors + j] = code;
+            }
+
+            subvectors.subvector_index++;
+        }
+
+        free(subvector);
+    } else {
+        for (int i = 0; i < n_vectors; i++) {
+            float *vector = &vectors[i * index->dimension];
+            int *vector_codes = &index->quantized_codes[i * index->n_subvectors];
+
+            for (int j = 0; j < index->n_subvectors; j++) {
+                float *subvector = &vector[j * index->subvector_dimension];
+
+                float *centroids = &index->codebook[
+                    j * index->subvector_dimension * index->centroids_per_page];
+        
+                int code = oj__get_closest_centroid(
+                        subvector,
+                        index->subvector_dimension,
+                        centroids,
+                        index->centroids_per_page);
+
+                vector_codes[j] = code;
+            }
         }
     }
 
