@@ -146,23 +146,6 @@ float recall_at_r(
     return result / (float)search_result.n_vectors;
  }
 
-#include <string.h>
-
-void vector_pivot(float *vecs, VecsInfo info) {
-    timeFunction;
-
-    float *aux = malloc(sizeof(float) * info.dimension * info.n);
-    memcpy(aux, vecs, sizeof(float) * info.dimension * info.n);
-
-    for (int i = 0; i < info.n; i++) {
-        for (int j = 0; j < info.dimension; j++) {
-            aux[j * info.n + i] = vecs[i * info.dimension + j];
-        }
-    }
-
-    free(aux);
-}
-
 int main(int argc, char **argv) {
     char *sift_base_filename = "data/siftsmall/siftsmall_base.fvecs";
     char *sift_ground_truth_filename = 
@@ -187,11 +170,9 @@ int main(int argc, char **argv) {
     //      n_bits_per_value  = 8 (when k* = 256)
     IndexPQ index = index_pq_init(base_vectors_info.dimension, 8, 8);
 
-    // vector_pivot(base_vectors, base_vectors_info);
-
-    index_pq_train(&index, base_vectors, base_vectors_info.n, true); 
+    index_pq_train(&index, base_vectors, base_vectors_info.n); 
     
-    index_pq_add(&index, base_vectors, base_vectors_info.n, true);
+    index_pq_add(&index, base_vectors, base_vectors_info.n);
 
     free(base_vectors);
 
