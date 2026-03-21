@@ -1,0 +1,2 @@
+Where to get SIFT vectors:
+http://corpus-texmex.irisa.fr/
