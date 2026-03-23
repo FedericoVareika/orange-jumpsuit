@@ -171,7 +171,7 @@ int main(int argc, char **argv) {
     IndexPQ index = index_pq_init(base_vectors_info.dimension, 8, 8);
 
     index_pq_train(&index, base_vectors, base_vectors_info.n); 
-    
+
     index_pq_add(&index, base_vectors, base_vectors_info.n);
 
     free(base_vectors);
@@ -256,7 +256,7 @@ int main(int argc, char **argv) {
             printf("%6d | %d\n", vector_ground_truth, vector_search_result);
         }
 
-        printf("\nRecall@1: %.f\%\n\n",
+        printf("\nRecall@1: %.f%% \n\n",
                 100 * recall_at_r(
                     search_result,
                     ground_truth_vectors,

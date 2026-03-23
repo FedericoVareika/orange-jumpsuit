@@ -92,7 +92,8 @@ void print_elapsed_time(u64 total_clocks, u64 timer_freq,
                         ProfileAnchor *anchor) {
     f64 percentage_exclusive =
         (f64)(anchor->exclusive_elapsed_time * 100) / (f64)total_clocks;
-    printf("  %s[%llu]: %llu (%.2f%%", anchor->label, anchor->hit_count,
+    // printf("  %s[%llu]: %llu (%.2f%%", anchor->label, anchor->hit_count,
+    printf("  %s[%lu]: %lu (%.2f%%", anchor->label, anchor->hit_count,
            anchor->exclusive_elapsed_time, percentage_exclusive);
 
     if (anchor->inclusive_elapsed_time != anchor->exclusive_elapsed_time) {
@@ -118,6 +119,8 @@ void print_elapsed_time(u64 total_clocks, u64 timer_freq,
     printf(")\n");
 }
 
+// printf("Total time: %f (Cpu freq: %llu)\n", total_time, cpu_freq);     \
+
 #define end_and_print_profiler()                                               \
     {                                                                          \
         endProfiler;                                                           \
@@ -125,7 +128,7 @@ void print_elapsed_time(u64 total_clocks, u64 timer_freq,
         u64 total_clocks =                                                     \
             global_profiler.end_time - global_profiler.start_time;             \
         f64 total_time = (f64)total_clocks / (f64)cpu_freq;                    \
-        printf("Total time: %f (Cpu freq: %llu)\n", total_time, cpu_freq);     \
+        printf("Total time: %f (Cpu freq: %lu)\n", total_time, cpu_freq);     \
                                                                                \
         for (int i = 0; i < __COUNTER__; i++) {                                \
             ProfileAnchor anchor = global_profiler.anchors[i + 1];             \
