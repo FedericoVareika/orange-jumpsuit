@@ -1,63 +1,60 @@
-*** with -O3:
+*** with common_flags_external:
 
-Total time: 11.293238 (Cpu freq: 1000000000)
-  index_pq_init[1]: 94 (0.00%)
-  oj__get_closest_centroid[3590000]: 10363092418 (91.76%)
-  oj__get_clusters[351]: 99517520 (0.88%, 90.59% w/children)
-  oj__update_centroids[351]: 3401663 (0.03%)
-  Initialize centroids[8]: 659966405 (5.84%)
-  Kmeans calculate centroids[8]: 415070 (0.00%, 90.62% w/children)
-  index_pq_train[1]: 32901 (0.00%, 96.47% w/children  4.883mb at 0.45mb/s)
-  index_pq_add[1]: 2178745 (0.02%, 2.08% w/children)
+Total time: 4.103194 (Cpu freq: 1000000000)
+  index_pq_init[1]: 152 (0.00%)
+  oj__get_clusters[200]: 3617761572 (88.17%)
+  oj__update_centroids[200]: 1566633 (0.04%)
+  Initialize centroids[8]: 191290460 (4.66%)
+  Kmeans calculate centroids[8]: 213190 (0.01%, 88.21% w/children)
+  index_pq_train[1]: 85882 (0.00%, 92.97% w/children  4.883mb at 1.28mb/s)
+  Copy subvectors to contiguous arrays[8]: 3697676 (0.09%  4.883mb at 1320.51mb/s)
+  index_pq_add[1]: 128524134 (3.13%)
+
+    *** perf:
+
+        Performance counter stats for './build/orange-jumpsuit':
+
+                      0      context-switches:u               #      0.0 cs/sec  cs_per_second
+                      0      cpu-migrations:u                 #      0.0 migrations/sec  migrations_per_second
+                  1,643      page-faults:u                    #    404.7 faults/sec  page_faults_per_second
+               4,059.70 msec task-clock:u                     #      1.0 CPUs  CPUs_utilized
+             12,809,433      branch-misses:u                  #      0.2 %  branch_miss_rate         (50.00%)
+          6,445,575,926      branches:u                       #   1587.7 M/sec  branch_frequency     (49.99%)
+         12,051,612,501      cpu-cycles:u                     #      3.0 GHz  cycles_frequency       (50.00%)
+         36,712,283,898      instructions:u                   #      3.0 instructions  insn_per_cycle  (50.00%)
+
+            4.067332675 seconds time elapsed
+
+            3.992739000 seconds user
+            0.015438000 seconds sys
 
 *** with common_flags_internal:  
 
-Total time: 15.151009 (Cpu freq: 1000000000)
-  index_pq_init[1]: 105 (0.00%)
-  oj__get_closest_centroid[3590000]: 13944731008 (92.04%)
-  oj__get_clusters[351]: 159654005 (1.05%, 91.05% w/children)
-  oj__update_centroids[351]: 3393294 (0.02%)
-  Initialize centroids[8]: 851222018 (5.62%)
-  Kmeans calculate centroids[8]: 932606 (0.01%, 91.08% w/children)
-  index_pq_train[1]: 37758 (0.00%, 96.70% w/children  4.883mb at 0.33mb/s)
-  index_pq_add[1]: 2691395 (0.02%, 2.06% w/children)
+Total time: 8.842457 (Cpu freq: 1000000000)
+  index_pq_init[1]: 217 (0.00%)
+  oj__get_clusters[200]: 7810989180 (88.34%)
+  oj__update_centroids[200]: 2144404 (0.02%)
+  Initialize centroids[8]: 444812036 (5.03%)
+  Kmeans calculate centroids[8]: 658144 (0.01%, 88.37% w/children)
+  index_pq_train[1]: 129970 (0.00%, 93.47% w/children  4.883mb at 0.59mb/s)
+  Copy subvectors to contiguous arrays[8]: 5907507 (0.07%  4.883mb at 826.54mb/s)
+  index_pq_add[1]: 308526343 (3.49%)
 
+    *** perf:
 
-*** perf col major: 
+         Performance counter stats for './build/orange-jumpsuit':
 
- Performance counter stats for './build/orange-jumpsuit':
+                         0      context-switches:u               #      0.0 cs/sec  cs_per_second
+                         0      cpu-migrations:u                 #      0.0 migrations/sec  migrations_per_second
+                     1,641      page-faults:u                    #    183.8 faults/sec  page_faults_per_second
+                  8,927.78 msec task-clock:u                     #      1.0 CPUs  CPUs_utilized
+                13,690,436      branch-misses:u                  #      0.1 %  branch_miss_rate         (49.99%)
+            15,511,281,811      branches:u                       #   1737.4 M/sec  branch_frequency     (50.00%)
+            26,878,095,696      cpu-cycles:u                     #      3.0 GHz  cycles_frequency       (50.02%)
+            93,994,476,218      instructions:u                   #      3.5 instructions  insn_per_cycle  (50.01%)
 
-                 0      context-switches:u               #      0.0 cs/sec  cs_per_second
-                 0      cpu-migrations:u                 #      0.0 migrations/sec  migrations_per_second
-             2,742      page-faults:u                    #    309.9 faults/sec  page_faults_per_second
-          8,848.57 msec task-clock:u                     #      1.0 CPUs  CPUs_utilized
-        13,777,448      branch-misses:u                  #      0.1 %  branch_miss_rate         (50.00%)
-    14,373,255,911      branches:u                       #   1624.4 M/sec  branch_frequency     (50.00%)
-    27,119,936,456      cpu-cycles:u                     #      3.1 GHz  cycles_frequency       (50.00%)
-    91,197,812,207      instructions:u                   #      3.4 instructions  insn_per_cycle  (50.00%)
+               8.931993925 seconds time elapsed
 
-       8.850663499 seconds time elapsed
-
-       8.782047000 seconds user
-       0.008828000 seconds sys
-
-*** perf row major:
-
- Performance counter stats for './build/orange-jumpsuit':
-
-                 0      context-switches:u               #      0.0 cs/sec  cs_per_second
-                 0      cpu-migrations:u                 #      0.0 migrations/sec  migrations_per_second
-             1,494      page-faults:u                    #    159.6 faults/sec  page_faults_per_second
-          9,362.98 msec task-clock:u                     #      1.0 CPUs  CPUs_utilized
-        13,573,910      branch-misses:u                  #      0.1 %  branch_miss_rate         (49.99%)
-    14,406,857,598      branches:u                       #   1538.7 M/sec  branch_frequency     (50.00%)
-    28,664,064,855      cpu-cycles:u                     #      3.1 GHz  cycles_frequency       (49.99%)
-    89,323,204,492      instructions:u                   #      3.1 instructions  insn_per_cycle  (50.01%)
-
-       9.365587510 seconds time elapsed
-
-       9.286574000 seconds user
-       0.003953000 seconds sys
-
-
+               8.807865000 seconds user
+               0.015488000 seconds sys
 
