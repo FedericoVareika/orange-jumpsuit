@@ -1,0 +1,44 @@
+[
+  {
+    "file": "src/linux_jumpsuit.c",
+    "arguments": [
+      "gcc",
+      "-std=gnu11",
+      "-O3",
+      "-ffast-math",
+      "-W",
+      "-mfma",
+      "-m64",
+      "src/linux_jumpsuit.c",
+      "-o",
+      "build/orange-jumpsuit"
+    ],
+    "directory": "/home/federicovareika/Facultad/Intercambio/CBD/orange-jumpsuit",
+    "output": "build/orange-jumpsuit"
+  },
+  {
+    "file": "src/linux_jumpsuit.c",
+    "arguments": [
+      "gcc",
+      "-fno-omit-frame-pointer",
+      "-mno-omit-leaf-frame-pointer",
+      "-std=gnu11",
+      "-O3",
+      "-ffast-math",
+      "-W",
+      "-mfma",
+      "-m64",
+      "src/linux_jumpsuit.c",
+      "-o",
+      "build/orange-jumpsuit",
+      "-B/nix/store/wb6rhpznjfczwlwx23zmdrrw74bayxw4-glibc-2.42-47/lib/",
+      "-idirafter",
+      "/nix/store/rwalsamz4246k8f1zzxa54qx7w3fbzdg-glibc-2.42-47-dev/include",
+      "-idirafter",
+      "/nix/store/mjf8jlq9grydcdvyw6hb063x5c34g5gf-gcc-15.2.0/lib/gcc/x86_64-unknown-linux-gnu/15.2.0/include-fixed",
+      "-B/nix/store/j2kgllgds4w7na8zqv1msi0mpvpjxda8-gcc-15.2.0-lib/lib"
+    ],
+    "directory": "/home/federicovareika/Facultad/Intercambio/CBD/orange-jumpsuit",
+    "output": "build/orange-jumpsuit"
+  }
+]

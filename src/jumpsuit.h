@@ -175,15 +175,6 @@ typedef struct {
     int dim;
 } Vectors;
 
-typedef struct {
-    float *vecs;
-    int n;
-    int dim;
-
-    int subvector_index;
-    int subvectors_per_vector;
-} Subvectors;
-
 internal float *oj__get_vector(Vectors vectors, int index) {
     return &vectors.vecs[vectors.dim * index];
 }
@@ -192,19 +183,320 @@ internal float *oj__get_random_vector(Vectors vectors) {
     return oj__get_vector(vectors, oj__randi(0, vectors.n));
 }
 
-internal float *oj__get_subvector(Subvectors subvectors, int index) {
-    int adjusted_index =
-        subvectors.subvector_index +
-        index * subvectors.subvectors_per_vector;
+internal void oj__transpose_vectors(Vectors vectors, Vectors t_vectors) {
+    for (int row = 0; row < vectors.n; row++) {
+        for (int col = 0; col < vectors.dim; col++) {
+            int pos = row * vectors.dim + col;
 
-    int global_float_index = adjusted_index * subvectors.dim;
-    return &subvectors.vecs[global_float_index];
+            int t_row = col;
+            int t_col = row;
+            int t_pos = t_row * t_vectors.dim + t_col;
+            t_vectors.vecs[t_pos] = vectors.vecs[pos];
+        }
+    }
 }
 
-internal float *oj__get_random_subvector(Subvectors subvectors) {
-    return oj__get_subvector(subvectors, oj__randi(0, subvectors.n));
+#include <immintrin.h>
+
+// NOTE(fede): Pack b block into b_panel.
+//  **b_panel should be able to fit entirely into L3 cache**
+internal void oj__pack_b_panel(
+        Vectors t_b, 
+        int nc, int kc, int nr, 
+        float *b_panel, int jc) {
+    float *b_panel_macro_col = b_panel;
+    int col = 0; 
+
+    int micro_kernel_col = 0;
+    while (col < nc) {
+
+        // NOTE(fede): When all 'nr' cols have been filled, move to 
+        //             the next b_panel_macro_col
+        if (micro_kernel_col == nr) {
+            micro_kernel_col = 0;
+            b_panel_macro_col = &b_panel_macro_col[kc * nr]; 
+        }
+
+        float *col_vec = oj__get_vector(t_b, jc + col);
+
+        for (int row = 0; row < kc; row++) {
+            b_panel_macro_col[row * nr] = col_vec[row];
+        } 
+
+        col++;
+        micro_kernel_col++;
+    }
 }
 
+// NOTE(fede): Pack a block into a_block
+//  **a_block should be able to fit entirely into L2 cache**
+internal void oj__pack_a_block(
+        Vectors a, 
+        int mc, int kc, int mr,
+        float *a_block, int ic) { 
+    float *a_block_macro_row = a_block;
+    int row = 0; 
+
+    int micro_kernel_row = 0;
+    while (row < mc) {
+
+        // NOTE(fede): When all 'nr' cols have been filled, move to 
+        //             the next b_panel_macro_col
+        if (micro_kernel_row == mr) {
+            micro_kernel_row = 0;
+            a_block_macro_row = &a_block_macro_row[kc * mr]; 
+        }
+
+        float *row_vec = oj__get_vector(a, ic + row);
+
+        for (int col = 0; col < kc; col++) {
+            a_block_macro_row[col * mr] = row_vec[col];
+        } 
+
+        row++;
+        micro_kernel_row++;
+    }
+}
+
+internal inline void oj__multiply_micro_kernel(
+        Vectors c, float *a_sliver, float *b_sliver, 
+        int nr, int mr,
+        int jc, int ic, int kc,
+        int jr, int ir) {
+
+    __m256 mB0; 
+    __m256 mB1;
+    __m256 mA0;
+    __m256 mA1;
+
+    __m256 result0_0  = _mm256_set1_ps(0); 
+    __m256 result1_0  = _mm256_set1_ps(0);
+    __m256 result2_0  = _mm256_set1_ps(0);
+    __m256 result3_0  = _mm256_set1_ps(0);
+    __m256 result4_0  = _mm256_set1_ps(0);
+    __m256 result5_0  = _mm256_set1_ps(0);
+    __m256 result0_1  = _mm256_set1_ps(0);
+    __m256 result1_1  = _mm256_set1_ps(0);
+    __m256 result2_1  = _mm256_set1_ps(0);
+    __m256 result3_1  = _mm256_set1_ps(0);
+    __m256 result4_1  = _mm256_set1_ps(0);
+    __m256 result5_1  = _mm256_set1_ps(0);
+
+	// This is the same for loop as in naive implementation, except now instead of the k indexing
+	// a single dot product of 2 vectors of size k (a row of A and a col of B),
+	// the k is indexing 6 rows of A and 16 cols of B
+	// Since the SIMD width is 8 (256 bits), need to do 12 fmas here
+
+    for(int k=0; k<kc; ++k) {
+
+		// Load the k'th row of the B block 
+        // (load twice since in total, it's 16 floats)
+        mB0   = _mm256_load_ps(&b_sliver[k * nr + 8*0]);
+        mB1   = _mm256_load_ps(&b_sliver[k * nr + 8*1]);
+
+        // Load a single value for the k'th col of A
+        // In total, we need to do this 6 times (col of A has height 6)
+        // Note: the addresses below must be aligned on a 32-byte boundary
+        mA0   = _mm256_set1_ps(a_sliver[0]);    // Load float @ A's col k, row m+0 into reg
+        mA1   = _mm256_set1_ps(a_sliver[1]);    // Load float @ A's col k, row m+1
+        // Now we have the 16 floats of B in mB0|mB1, and the 2 floats
+        // of A broadcast in mA0 and mA1.
+        result0_0      = _mm256_fmadd_ps(mB0,mA0,result0_0); // result = arg1 .* arg2 .+ arg3
+        result0_1      = _mm256_fmadd_ps(mB1,mA0,result0_1);
+        result1_0      = _mm256_fmadd_ps(mB0,mA1,result1_0);
+        result1_1      = _mm256_fmadd_ps(mB1,mA1,result1_1);
+        // result0_0 now contains the final result, for this k,
+        // of row 0 and cols 0-7.
+        // result0_1 now contains the final result, for this k,
+        // of row 0 and cols 8-15.
+        // result1_0 now contains the final result, for this k,
+        // of row 1 and cols 0-7.
+        // result1_1 now contains the final result, for this k,
+        // of row 1 and cols 8-15.
+        
+        // Repeat for the other 4
+        
+        mA0   = _mm256_set1_ps(a_sliver[2]);
+        mA1   = _mm256_set1_ps(a_sliver[3]);
+        result2_0      = _mm256_fmadd_ps(mB0,mA0,result2_0);
+        result2_1      = _mm256_fmadd_ps(mB1,mA0,result2_1);
+        result3_0      = _mm256_fmadd_ps(mB0,mA1,result3_0);
+        result3_1      = _mm256_fmadd_ps(mB1,mA1,result3_1);
+        
+        mA0   = _mm256_set1_ps(a_sliver[4]);
+        mA1   = _mm256_set1_ps(a_sliver[5]);
+        result4_0      = _mm256_fmadd_ps(mB0,mA0,result4_0);
+        result4_1      = _mm256_fmadd_ps(mB1,mA0,result4_1);
+        result5_0      = _mm256_fmadd_ps(mB0,mA1,result5_0);
+        result5_1      = _mm256_fmadd_ps(mB1,mA1,result5_1);
+    }
+    
+    float *c_row_0 = oj__get_vector(c, ic + ir + 0);
+    float *c_row_1 = oj__get_vector(c, ic + ir + 1);
+    float *c_row_2 = oj__get_vector(c, ic + ir + 2);
+    float *c_row_3 = oj__get_vector(c, ic + ir + 3);
+    float *c_row_4 = oj__get_vector(c, ic + ir + 4);
+    float *c_row_5 = oj__get_vector(c, ic + ir + 5);
+
+    // Write registers back to C
+    *((__m256*) (&c_row_0[jc+jr+0*8])) += result0_0;
+    *((__m256*) (&c_row_0[jc+jr+1*8])) += result0_1;
+    *((__m256*) (&c_row_1[jc+jr+0*8])) += result1_0;
+    *((__m256*) (&c_row_1[jc+jr+1*8])) += result1_1;
+    *((__m256*) (&c_row_2[jc+jr+0*8])) += result2_0;
+    *((__m256*) (&c_row_2[jc+jr+1*8])) += result2_1;
+    *((__m256*) (&c_row_3[jc+jr+0*8])) += result3_0;
+    *((__m256*) (&c_row_3[jc+jr+1*8])) += result3_1;
+    *((__m256*) (&c_row_4[jc+jr+0*8])) += result4_0;
+    *((__m256*) (&c_row_4[jc+jr+1*8])) += result4_1;
+    *((__m256*) (&c_row_5[jc+jr+0*8])) += result5_0;
+    *((__m256*) (&c_row_5[jc+jr+1*8])) += result5_1;
+}
+
+#define NC 1536
+#define KC 240
+#define MC 120
+#define NR 16
+#define MR 6
+
+internal void oj__multiply_vectors_blocking(
+        Vectors a, Vectors t_b, Vectors c, 
+        int nc, int kc, int mc, int nr, int mr,
+        float *b_panel, float *a_block) {
+    timeFunction;
+    assert(a.dim == t_b.dim);
+
+    int n = t_b.n; 
+    int m = a.n; 
+    int k = a.dim; 
+
+    assert(nc % nr == 0);
+    assert(mc % mr == 0);
+
+    // TODO(fede): include support for varying micro kernels, but since i found 
+    //              an implementation of a 16x6 micro kernel multiply, i will 
+    //              use it.
+    assert(nr == 16);
+    assert(mr == 6);
+
+    for (int jc = 0; jc < n; jc += nc) {
+        for (int pc = 0; pc < k; pc += kc) {
+
+            oj__pack_b_panel(t_b, nc, kc, nr, b_panel, jc);
+
+            for (int ic = 0; ic < m; ic += mc) {
+
+                oj__pack_a_block(a, mc, kc, mr, a_block, ic);
+
+                for (int jr = 0; jr < nc; jr += nr) {
+                    float *b_sliver = &b_panel[jr * kc];
+
+                    for (int ir = 0; ir < mc; ir += mr) {
+                        float *a_sliver = &a_block[ir * kc];
+
+                        oj__multiply_micro_kernel(
+                                c, a_sliver, b_sliver,
+                                nr, mr,
+                                jc, ic, kc,
+                                jr, ir);
+                    }
+                }
+            }
+        }
+    }
+} 
+
+internal void oj__init_blocking_vectors(
+        int nc, int kc, int mc,
+        float **b_panel, float **a_block) {
+    *b_panel = aligned_alloc(32, sizeof(float) * kc * nc);
+    *a_block = aligned_alloc(32, sizeof(float) * mc * kc);
+}
+
+internal void oj__multiply_vectors_simd(Vectors a, Vectors t_b, Vectors c) {
+    timeFunction;
+    assert(a.dim == t_b.dim);
+
+    // STUDY(fede): Change the order of the loops, simd may benefit knowing a 
+    //              is larger
+    for (int a_i = 0; a_i < a.n; a_i++) {
+        float *a_vec = oj__get_vector(a, a_i);
+        float *c_vec = oj__get_vector(c, a_i);
+        for (int b_i = 0; b_i < t_b.n; b_i++) {
+            c_vec[b_i] = 0;
+            float *b_vec = oj__get_vector(t_b, b_i);
+
+            __m256 result = _mm256_set1_ps(0);
+
+            int k = 0;
+            while (k < a.dim - 7) {
+
+                __m256 mA = _mm256_load_ps(&a_vec[k]);
+                __m256 mB = _mm256_load_ps(&b_vec[k]);
+
+                result = _mm256_fmadd_ps(mA, mB, result);
+
+                c_vec[b_i] += a_vec[k] * b_vec[k];
+                k += 8;
+            }
+
+            float *farr = (float *)&result;
+            c_vec[b_i] = 
+                farr[0] + farr[1] + farr[2] + farr[3] +
+                farr[4] + farr[5] + farr[6] + farr[7];
+
+            while (k < a.dim) {
+                c_vec[b_i] += a_vec[k] * b_vec[k];
+                k++;
+            }
+        }
+    }
+}
+
+#include <cblas.h>
+
+internal void oj__multiply_vectors_blas(Vectors a, Vectors t_b, Vectors c) {
+    timeFunction; 
+
+    float *A = a.vecs;
+    float *BT = t_b.vecs;
+    float *C = c.vecs;
+
+    int M = a.n; 
+    int K = a.dim; 
+    int N = t_b.n;
+
+    // C = alpha*a*b + beta*c
+    float alpha = 1;
+    float beta = 0;
+
+    cblas_sgemm(CblasRowMajor, 
+                CblasNoTrans,   // A is normal
+                CblasTrans,     // B is provided as B^T, so we "Trans" it back
+                M, N, K, 
+                alpha, 
+                A, K,           // lda: leading dimension of A
+                BT, K,          // ldb: leading dimension of BT (it's K)
+                beta, 
+                C, N);          // ldc: leading dimension of C
+}
+
+// TODO(fede): Naive implementation of matrix multiplication
+internal void oj__multiply_vectors(Vectors a, Vectors t_b, Vectors c) {
+    timeFunction;
+    assert(a.dim == t_b.dim);
+    for (int a_i = 0; a_i < a.n; a_i++) {
+        float *a_vec = oj__get_vector(a, a_i);
+        float *c_vec = oj__get_vector(c, a_i);
+        for (int b_i = 0; b_i < t_b.n; b_i++) {
+            c_vec[b_i] = 0;
+            float *b_vec = oj__get_vector(t_b, b_i);
+            for (int k = 0; k < a.dim; k++) {
+                c_vec[b_i] += a_vec[k] * b_vec[k];
+            }
+        }
+    }
+}
 
 /*
 // NOTE(fede): This lead to bad results, ended up using kmeans++ instead
@@ -322,7 +614,63 @@ internal int oj__get_closest_centroid(Vectors centroids, float *vec) {
     return min_d2_centroid_idx;
 }
 
-internal void oj__get_clusters(
+internal void oj__calculate_sqr_norms(Vectors vectors, float *dest) {
+    timeFunction;
+
+    for (int i = 0; i < vectors.n; i++) {
+        float sqr_norm = 0;
+        for (int j = 0; j < vectors.dim; j++) {
+            float v = vectors.vecs[i * vectors.dim + j];
+            sqr_norm += v * v;
+        }
+
+        dest[i] = sqr_norm;
+    }
+}
+
+float *A_BLOCK, *B_PANEL;
+internal void oj__get_distances(
+        Vectors subvectors, 
+        float *subvector_sqr_norms,
+        Vectors centroids, 
+        float *centroid_sqr_norms,
+        float *distances, 
+        float *a_block, float *b_panel) {
+    oj__calculate_sqr_norms(centroids, centroid_sqr_norms);
+
+    // NOTE(fede): be careful, this is reusing the distances memory, so it 
+    //             should not be overwritten.
+    Vectors dotproduct_vectors = {
+        .vecs = distances, 
+        .n = subvectors.n,
+        .dim = centroids.n,
+    };
+    
+
+    // oj__multiply_vectors(subvectors, centroids, dotproduct_vectors);
+    // oj__multiply_vectors_simd(subvectors, centroids, dotproduct_vectors);
+    // oj__multiply_vectors_blocking(
+    //         subvectors, centroids, dotproduct_vectors, 
+    //         min(NC, centroids.n), KC, MC, NR, MR, b_panel, a_block);
+    
+    oj__multiply_vectors_blas(subvectors, centroids, dotproduct_vectors);
+
+    {
+        timeBlock("Final sum for distances");
+        for (int i = 0; i < subvectors.n; i++) {
+            for (int j = 0; j < centroids.n; j++) {
+                int pos = i * centroids.n + j;
+                float dotproduct = distances[pos]; 
+                distances[pos] = 
+                    subvector_sqr_norms[i]
+                    + centroid_sqr_norms[j] 
+                    - 2 * dotproduct;
+            } 
+        } 
+    }
+}
+
+internal void oj__get_clusters_old(
         Vectors subvectors,
         Vectors centroids,
         Vectors cluster_sums,
@@ -341,6 +689,59 @@ internal void oj__get_clusters(
 
         oj__add_vectors(cluster_sum, vec, subvectors.dim, cluster_sum);
         cluster_amount[closest_centroid_idx]++;
+    }
+}
+
+internal void oj__get_clusters(
+        Vectors subvectors,
+        float *subvector_sqr_norms,
+        Vectors centroids,
+        float *centroid_sqr_norms,
+        Vectors cluster_sums,
+        int *cluster_amount, 
+        float *distances, 
+        float *a_block, float *b_panel) {
+    timeFunction;
+
+    oj__get_distances(
+            subvectors,
+            subvector_sqr_norms,
+            centroids,
+            centroid_sqr_norms,
+            distances, 
+            a_block, a_block);
+
+    for (int i = 0; i < subvectors.n; i++) {
+        float *subvector = oj__get_vector(subvectors, i);
+
+        float min_distance = distances[i * centroids.dim];
+        int closest_centroid = 0;
+
+        for (int j = 1; j < centroids.n; j++) {
+            float distance = distances[i * centroids.n + j];
+            if (min_distance > distance) {
+                closest_centroid = j; 
+                min_distance = distance;
+            } 
+
+#if 0
+            float *centroid = oj__get_vector(centroids, j);
+            float calculated_distance = oj__vector_distance2(
+                        subvector,
+                        centroid,
+                        subvectors.dim);
+            assert(distance + 0.005 >= calculated_distance 
+                    && distance - 0.005 <= calculated_distance);
+#endif
+        }
+
+        float *vec = oj__get_vector(subvectors, i);
+        float *cluster_sum = oj__get_vector(
+                cluster_sums,
+                closest_centroid);
+
+        oj__add_vectors(cluster_sum, vec, subvectors.dim, cluster_sum);
+        cluster_amount[closest_centroid]++;
     }
 }
 
@@ -399,6 +800,19 @@ internal void oj__get_kmeans_cluster_centroids(
 
     srand(07734); // hello
 
+    float *subvector_sqr_norms = aligned_alloc(32, 
+            sizeof(float) * subvectors.n);
+    assert(subvector_sqr_norms);
+    oj__calculate_sqr_norms(subvectors, subvector_sqr_norms);
+
+    float *centroid_sqr_norms = aligned_alloc(32,
+            sizeof(float) * centroids.n);
+    assert(centroid_sqr_norms);
+
+    float *distances = aligned_alloc(32,
+            sizeof(float) * subvectors.n * centroids.n); 
+    assert(distances);
+
     {
         timeBlock("Initialize centroids");
 
@@ -415,7 +829,6 @@ internal void oj__get_kmeans_cluster_centroids(
     {
         timeBlock("Kmeans calculate centroids");
         for (int i = 0; !should_stop && i < max_iterations; i++) {
-
             oj__clear_array(cluster_sums.vecs,
                     cluster_sums.n * cluster_sums.dim,
                     0);
@@ -423,9 +836,19 @@ internal void oj__get_kmeans_cluster_centroids(
 
             oj__get_clusters(
                     subvectors,
+                    subvector_sqr_norms,
                     centroids,
+                    centroid_sqr_norms,
                     cluster_sums,
-                    cluster_amount);
+                    cluster_amount, 
+                    distances, 
+                    A_BLOCK, B_PANEL);
+
+            // oj__get_clusters_old(
+            //         subvectors,
+            //         centroids,
+            //         cluster_sums,
+            //         cluster_amount);
 
             oj__update_centroids(
                     subvectors,
@@ -435,11 +858,17 @@ internal void oj__get_kmeans_cluster_centroids(
                     &should_stop);
         }
     }
+
+    free(subvector_sqr_norms);
+    free(centroid_sqr_norms);
+    free(distances);
 }
 
 // TODO(fede): this will allocate memory, pass arena to it.
 void index_pq_train(IndexPQ *index, float *vectors, int n_vectors) {
     timeBandwidth(__func__, n_vectors * index->dimension * sizeof(float));
+
+    oj__init_blocking_vectors(NC, KC, MC, &B_PANEL, &A_BLOCK);
 
     //            (C_i = [c_1, c_2, ..., c_k*])
     // codebook = [C_1, C_2, ..., C_m]
@@ -452,19 +881,12 @@ void index_pq_train(IndexPQ *index, float *vectors, int n_vectors) {
 
     // NOTE(fede): Allow user to query length and allocate this themselves
     if (!index->codebook)
-        index->codebook = malloc(codebook_size);
+        index->codebook = aligned_alloc(32, codebook_size);
 
     assert(index->codebook);
 
-    // Subvectors subvectors = {
-    //     .vecs = vectors, 
-    //     .n = n_vectors, 
-    //     .dim = index->subvector_dimension, 
-    //     .subvector_index = 0, 
-    //     .subvectors_per_vector = index->n_subvectors,
-    // };
     Vectors subvectors = {
-        .vecs = malloc(
+        .vecs = aligned_alloc(32,
                 index->subvector_dimension *
                 // index->n_subvectors * 
                 n_vectors *
@@ -532,24 +954,9 @@ void index_pq_train(IndexPQ *index, float *vectors, int n_vectors) {
     free(prealloced_cluster_vector_sums);
     free(prealloced_cluster_amount);
     free(preallocated_subvector_distances2);
-}
 
-internal void oj__set_vector_codes(
-        Subvectors subvectors,
-        Vectors centroids,
-        int *quantized_codes) {
-
-    int code_pos = subvectors.subvector_index;
-    for (int i = 0; i < subvectors.n; i++) {
-        float *vec = oj__get_subvector(subvectors, i);
-
-        int closest_centroid_idx = oj__get_closest_centroid(
-                centroids, vec);
-
-        quantized_codes[code_pos] = closest_centroid_idx;
-
-        code_pos += subvectors.subvectors_per_vector;
-    }
+    // free(B_PANEL);
+    // free(A_BLOCK);
 }
 
 // TODO(fede): this will allocate memory, pass arena to it.

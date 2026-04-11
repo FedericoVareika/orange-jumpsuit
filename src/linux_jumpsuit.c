@@ -181,22 +181,6 @@ int main(int argc, char **argv) {
     }
     printf("\n");
 
-
-    // export_csv(
-    //         index.codebook,
-    //         index.centroids_per_page,
-    //         index.subvector_dimension,
-    //         "centroids1.csv");
-
-    // export_csv(
-    //         &index.codebook[
-    //             index.centroids_per_page *
-    //             index.subvector_dimension *
-    //             (index.n_subvectors - 1)],
-    //         index.centroids_per_page,
-    //         index.subvector_dimension,
-    //         "centroidsLast.csv");
-
     {
         int n_neighbours = query_vectors_info.dimension; 
         int n_vectors_search = query_vectors_info.n; 
