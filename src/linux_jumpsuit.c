@@ -148,6 +148,7 @@ float recall_at_r(
 
 int main(int argc, char **argv) {
     char *sift_base_filename = "data/siftsmall/siftsmall_base.fvecs";
+    char *sift_learn_filename = "data/siftsmall/siftsmall_learn.fvecs";
     char *sift_ground_truth_filename = 
         "data/siftsmall/siftsmall_groundtruth.ivecs";
     char *sift_query_filename = 
@@ -157,6 +158,10 @@ int main(int argc, char **argv) {
 
     float *base_vectors = 0;
     VecsInfo base_vectors_info = load_fvecs(sift_base_filename, &base_vectors);
+
+    float *learn_vectors = 0;
+    VecsInfo learn_vectors_info = 
+        load_fvecs(sift_learn_filename, &learn_vectors);
 
     float *query_vectors = 0;
     VecsInfo query_vectors_info = 
@@ -170,7 +175,7 @@ int main(int argc, char **argv) {
     //      n_bits_per_value  = 8 (when k* = 256)
     IndexPQ index = index_pq_init(base_vectors_info.dimension, 8, 8);
 
-    index_pq_train(&index, base_vectors, base_vectors_info.n); 
+    index_pq_train(&index, learn_vectors, learn_vectors_info.n); 
 
     index_pq_add(&index, base_vectors, base_vectors_info.n);
 
@@ -182,7 +187,7 @@ int main(int argc, char **argv) {
     printf("\n");
 
     {
-        int n_neighbours = query_vectors_info.dimension; 
+        int n_neighbours = 100;
         int n_vectors_search = query_vectors_info.n; 
 
         int *search_indices = 
@@ -196,40 +201,6 @@ int main(int argc, char **argv) {
                 n_vectors_search,
                 n_neighbours);
 
-        // for (int i = 0; i < 3; i++) {
-        //     float *vector = &query_vectors[i * base_vectors_info.dimension];
-        //     int *indices = &search_result.indices[i * n_neighbours];
-        //     float *distances = &search_result.distances[i * n_neighbours];
-
-        //    printf("For vector (");
-        //     for (int j = 0; j < base_vectors_info.dimension; j++) {
-        //         printf("%.2f", vector[j]);
-        //         if (j != base_vectors_info.dimension)
-        //             printf(", ");
-        //     }
-        //     printf("): \n [ \n");
-
-        //     for (int j = 0; j < 3; j++) {
-        //         printf("    %d, distance = %.2f\n", indices[j], distances[j]);
-        //     }
-
-        //     printf("] \n\n");
-
-        //     if (i < ground_truth_vectors_info.n) {
-        //         printf("Ground truth: [\n");
-
-        //         int *ground_truths = &ground_truth_vectors[
-        //             i * ground_truth_vectors_info.dimension];
-        //         for (int j = 0; j < 3; j++) {
-        //             printf("    %d\n", ground_truths[j]);
-        //         }
-
-        //         printf("] \n\n");
-        //     } else {
-        //         printf("Ground truth is not available for vector n: %d\n", i);
-        //     }
-        // }
-        
         printf("%6s | Result\n", "GT");
         for (int i = 0; i < search_result.n_vectors; i++) {
             int vector_search_result = 
