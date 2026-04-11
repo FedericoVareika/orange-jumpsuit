@@ -2,7 +2,7 @@
 
 common_flags_internal="-ffile-prefix-map=old=new -g -W"
 common_flags_external="-O3 -ffast-math -W -m64"
-linker_flags="-lm -mavx2 -mfma -lopenblas"
+linker_flags="-lm -mavx2 -mfma -lopenblas -fopenmp"
 
 mkdir -p build
 

@@ -455,7 +455,13 @@ internal void oj__multiply_vectors_simd(Vectors a, Vectors t_b, Vectors c) {
 
 #include <cblas.h>
 
-internal void oj__multiply_vectors_blas(Vectors a, Vectors t_b, Vectors c) {
+// C = alpha*a*b + beta*c
+internal void oj__multiply_vectors_blas(
+        Vectors a,
+        Vectors t_b,
+        Vectors c,
+        float alpha, 
+        float beta) {
     timeFunction; 
 
     float *A = a.vecs;
@@ -465,10 +471,6 @@ internal void oj__multiply_vectors_blas(Vectors a, Vectors t_b, Vectors c) {
     int M = a.n; 
     int K = a.dim; 
     int N = t_b.n;
-
-    // C = alpha*a*b + beta*c
-    float alpha = 1;
-    float beta = 0;
 
     cblas_sgemm(CblasRowMajor, 
                 CblasNoTrans,   // A is normal
@@ -652,22 +654,24 @@ internal void oj__get_distances(
     // oj__multiply_vectors_blocking(
     //         subvectors, centroids, dotproduct_vectors, 
     //         min(NC, centroids.n), KC, MC, NR, MR, b_panel, a_block);
+    //
     
-    oj__multiply_vectors_blas(subvectors, centroids, dotproduct_vectors);
-
     {
-        timeBlock("Final sum for distances");
+        timeBlock("Add sqr norms");
+        #pragma omp parallel for
         for (int i = 0; i < subvectors.n; i++) {
             for (int j = 0; j < centroids.n; j++) {
                 int pos = i * centroids.n + j;
                 float dotproduct = distances[pos]; 
                 distances[pos] = 
                     subvector_sqr_norms[i]
-                    + centroid_sqr_norms[j] 
-                    - 2 * dotproduct;
+                    + centroid_sqr_norms[j];
             } 
         } 
     }
+
+    oj__multiply_vectors_blas(subvectors, centroids, dotproduct_vectors, -2, 1);
+
 }
 
 internal void oj__get_clusters_old(
@@ -711,6 +715,7 @@ internal void oj__get_clusters(
             distances, 
             a_block, a_block);
 
+    #pragma omp parallel for
     for (int i = 0; i < subvectors.n; i++) {
         float *subvector = oj__get_vector(subvectors, i);
 
