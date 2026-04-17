@@ -1,5 +1,4 @@
-#ifndef LINUX_HELPERS_H
-#define LINUX_HELPERS_H
+#include "../platform_helpers.h"
 
 #include <sys/stat.h>
 #include <sys/mman.h>
@@ -13,12 +12,7 @@
 
 #include <time.h>
 
-typedef struct {
-    u64 size;
-    void *memory;
-} ReadFileResult;
-
-ReadFileResult read_entire_file(char *filename) {
+ReadFileResult platform_read_entire_file(char *filename) {
     ReadFileResult result = {};
 
     int fd = open(filename, O_RDONLY);
@@ -51,13 +45,13 @@ ReadFileResult read_entire_file(char *filename) {
     return result;
 }
 
-void free_file_memory(ReadFileResult file_result) {
+void platform_free_file_memory(ReadFileResult file_result) {
     if (file_result.memory) {
         munmap(file_result.memory, file_result.size);
     }
 }
 
-bool write_entire_file(char *filename, u64 size, void *memory) {
+bool platform_write_entire_file(char *filename, u64 size, void *memory) {
     /*
      * NOTE(fede): When O_CREAT flag is set, a *mode* flag must be set as well.
      *
@@ -85,7 +79,7 @@ bool write_entire_file(char *filename, u64 size, void *memory) {
     return true;
 }
 
-i64 linux_get_performance_counter(void)
+i64 platform_get_performance_counter(void)
 {
     i64 ticks = 0;
     struct timespec now;
@@ -98,9 +92,7 @@ i64 linux_get_performance_counter(void)
     return ticks;
 }
 
-u64 linux_get_performance_frequency(void)
+u64 platform_get_performance_frequency(void)
 {
     return 1000000000;
 }
-
-#endif // LINUX_HELPERS_H

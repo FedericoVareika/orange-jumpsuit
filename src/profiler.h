@@ -4,7 +4,7 @@
 
 #if PROFILER
 
-#include "linux_helpers.h"
+#include "platform_helpers.h"
 
 typedef struct {
     const char *label;
@@ -45,7 +45,7 @@ void profile_block_destructor(ProfileBlock *profile_block_ptr) {
     u64 old_inclusive_elapsed_time =
         profile_block_ptr->old_inclusive_elapsed_time;
 
-    u64 elapsed_time = linux_get_performance_counter() - block_start_tsc;
+    u64 elapsed_time = platform_get_performance_counter() - block_start_tsc;
 
     ProfileAnchor *anchor = &global_profiler.anchors[anchor_index];
     ProfileAnchor *parent = &global_profiler.anchors[parent_index];
@@ -65,7 +65,7 @@ ProfileBlock construct_block(const char *anchor_label, u32 anchor_index,
         anchor_label,
         anchor_index,
         global_profiler_parent,
-        linux_get_performance_counter(),
+        platform_get_performance_counter(),
         anchor->inclusive_elapsed_time,
     };
     anchor->processed_byte_count += byte_count;
@@ -83,10 +83,10 @@ ProfileBlock construct_block(const char *anchor_label, u32 anchor_index,
 #define timeFunction timeBlock(__func__)
 
 #define beginProfiler                                                          \
-    { global_profiler.start_time = linux_get_performance_counter(); }
+    { global_profiler.start_time = platform_get_performance_counter(); }
 
 #define endProfiler                                                            \
-    { global_profiler.end_time = linux_get_performance_counter(); }
+    { global_profiler.end_time = platform_get_performance_counter(); }
 
 void print_elapsed_time(u64 total_clocks, u64 timer_freq,
                         ProfileAnchor *anchor) {
@@ -124,7 +124,7 @@ void print_elapsed_time(u64 total_clocks, u64 timer_freq,
 #define end_and_print_profiler()                                               \
     {                                                                          \
         endProfiler;                                                           \
-        u64 cpu_freq = linux_get_performance_frequency();                   \
+        u64 cpu_freq = platform_get_performance_frequency();                   \
         u64 total_clocks =                                                     \
             global_profiler.end_time - global_profiler.start_time;             \
         f64 total_time = (f64)total_clocks / (f64)cpu_freq;                    \
@@ -151,5 +151,6 @@ void print_elapsed_time(u64 total_clocks, u64 timer_freq,
 #define endProfiler
 #define end_and_print_profiler(...)
 #define ProfilerEndOfCompilationUnit
+
 #endif
 

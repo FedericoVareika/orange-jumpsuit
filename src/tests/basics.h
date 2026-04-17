@@ -45,4 +45,41 @@ typedef double f64;
 
 typedef enum { false, true } bool;
 
+
+//////////////////////////////////////////////////////////////////////////////
+/// BUFFER READING
+
+typedef struct {
+    u8 *data;
+    int cursor; 
+    int size;
+} Buffer;
+
+global u8 buffer_get(Buffer *buf) {
+    if (buf->cursor >= buf->size) 
+        return 0;
+    return buf->data[buf->cursor++];
+}
+
+global void buffer_skip(Buffer *buf, int n) {
+    assert(buf->cursor + n <= buf->size);
+    buf->cursor += n;
+}
+
+global f32 buffer_get_f32(Buffer *buf) {
+    assert(buf->cursor % sizeof(f32) == 0);
+    f32 result = *(f32 *)(&buf->data[buf->cursor]);
+    buffer_skip(buf, sizeof(f32));
+    return result;
+}
+
+global int buffer_get_int(Buffer *buf) {
+    assert(buf->cursor % sizeof(int) == 0);
+    int result = *(int *)(&buf->data[buf->cursor]);
+    buffer_skip(buf, sizeof(int));
+    return result;
+}
+
+//////////////////////////////////////////////////////////////////////////////
+
 #endif // BASICS_H

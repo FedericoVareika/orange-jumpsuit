@@ -1,9 +1,7 @@
 #ifndef JUMPSUIT_H
 #define JUMPSUIT_H
 
-#include "basics.h"
-
-// TODO(fede): for using srand and malloc, 
+// TODO(fede): for using srand, aligned_alloc, and malloc, 
 //   these should be changed for custom random and arenas respectively.
 #include <stdlib.h>
 
@@ -13,45 +11,38 @@
 #ifdef __cplusplus
 extern "C" {
 #endif
+
+#define assert(expression)                                                     \
+    if (!(expression)) {                                                       \
+        *(int *)0 = 0;                                                         \
+    }
+
+#define internal static
+#define global static
+#define local_persist static
+
+#define max(a, b) ((a) > (b) ? (a) : (b))
+#define min(a, b) ((a) < (b) ? (a) : (b))
+#define abs(a) ((a) < 0 ? -(a) : (a))
+
+#define array_count(a) (sizeof((a)) / sizeof((a)[0]))
+
+#ifndef oj__bool
+typedef enum { oj__false, oj__true } oj__bool;
+#endif
+
+////////////////////////////////////
+// Cross-Platform alligned alloc
+
+#if defined(_WIN32) || defined(_WIN64)
+    #include <malloc.h>
+    #define oj__aligned_alloc(alignment, size) _aligned_malloc(size, alignment)
+    #define oj__aligned_free(ptr) _aligned_free(ptr)
+#else
+    #define oj__aligned_alloc(alignment, size) aligned_alloc(alignment, size)
+    #define oj__aligned_free(ptr) free(ptr)
+#endif
     
-//////////////////////////////////////////////////////////////////////////////
-/// FILE READING
-
-typedef struct {
-    u8 *data;
-    int cursor; 
-    int size;
-} Buffer;
-
-global u8 buffer_get(Buffer *buf) {
-    if (buf->cursor >= buf->size) 
-        return 0;
-    return buf->data[buf->cursor++];
-}
-
-global void buffer_skip(Buffer *buf, int n) {
-    assert(buf->cursor + n <= buf->size);
-    buf->cursor += n;
-}
-
-global f32 buffer_get_f32(Buffer *buf) {
-    assert(buf->cursor % sizeof(f32) == 0);
-    f32 result = *(f32 *)(&buf->data[buf->cursor]);
-    buffer_skip(buf, sizeof(f32));
-    return result;
-}
-
-global int buffer_get_int(Buffer *buf) {
-    assert(buf->cursor % sizeof(int) == 0);
-    int result = *(int *)(&buf->data[buf->cursor]);
-    buffer_skip(buf, sizeof(int));
-    return result;
-}
-
-//////////////////////////////////////////////////////////////////////////////
-/// 2D ARRAY ACCESS
-
-
 //////////////////////////////////////////////////////////////////////////////
 /// VECTOR PROCESSING
 
@@ -157,6 +148,14 @@ internal void oj__add_vectors(float *vec1, float *vec2, int dim, float *dest) {
     }
 }
 
+internal inline float oj__vector_dotproduct(float *vec1, float *vec2, int dim) {
+    float result = 0;
+    for (int i = 0; i < dim; i++) {
+        result += vec1[i] * vec2[i];
+    }
+    return result;
+}
+
 internal void oj__vector_div(float *vec, int dim, float div, float *dest) {
     for (int i = 0; i < dim; i++) {
         dest[i] = vec[i] / div;
@@ -196,6 +195,16 @@ internal void oj__transpose_vectors(Vectors vectors, Vectors t_vectors) {
     }
 }
 
+internal float oj__calculate_sqr_norm(Vectors vectors, int i) {
+    float sqr_norm = 0;
+    for (int j = 0; j < vectors.dim; j++) {
+        float v = vectors.vecs[i * vectors.dim + j];
+        sqr_norm += v * v;
+    }
+
+    return sqr_norm;
+}  
+
 #include <immintrin.h>
 
 // NOTE(fede): Pack b block into b_panel.
@@ -209,7 +218,6 @@ internal void oj__pack_b_panel(
 
     int micro_kernel_col = 0;
     while (col < nc) {
-
         // NOTE(fede): When all 'nr' cols have been filled, move to 
         //             the next b_panel_macro_col
         if (micro_kernel_col == nr) {
@@ -409,50 +417,63 @@ internal void oj__multiply_vectors_blocking(
 internal void oj__init_blocking_vectors(
         int nc, int kc, int mc,
         float **b_panel, float **a_block) {
-    *b_panel = aligned_alloc(32, sizeof(float) * kc * nc);
-    *a_block = aligned_alloc(32, sizeof(float) * mc * kc);
+    *b_panel = oj__aligned_alloc(32, sizeof(float) * kc * nc);
+    *a_block = oj__aligned_alloc(32, sizeof(float) * mc * kc);
 }
 
-internal void oj__multiply_vectors_simd(Vectors a, Vectors t_b, Vectors c) {
+#define oj__reduce_mm256(v, dest) \
+    do { \
+        float *farr = (float *)&v; \
+        dest = \
+            farr[0] + farr[1] + farr[2] + farr[3] + \
+            farr[4] + farr[5] + farr[6] + farr[7]; \
+    } while (0)
+
+// C = alpha*a*b + beta*c
+internal void oj__multiply_vectors_simd(
+        Vectors a,
+        Vectors t_b,
+        Vectors c,
+        float alpha, 
+        float beta) {
     timeFunction;
     assert(a.dim == t_b.dim);
+    assert(a.dim == 16);
 
     // STUDY(fede): Change the order of the loops, simd may benefit knowing a 
     //              is larger
+// #pragma omp parallel for
     for (int a_i = 0; a_i < a.n; a_i++) {
         float *a_vec = oj__get_vector(a, a_i);
         float *c_vec = oj__get_vector(c, a_i);
         for (int b_i = 0; b_i < t_b.n; b_i++) {
-            c_vec[b_i] = 0;
             float *b_vec = oj__get_vector(t_b, b_i);
 
-            __m256 result = _mm256_set1_ps(0);
+            __m256 result0 = _mm256_set1_ps(0);
+            __m256 result1 = _mm256_set1_ps(0);
 
-            int k = 0;
-            while (k < a.dim - 7) {
+            __m256 mA0 = _mm256_load_ps(&a_vec[0]);
+            __m256 mA1 = _mm256_load_ps(&a_vec[8]);
+            __m256 mB0 = _mm256_load_ps(&b_vec[0]);
+            __m256 mB1 = _mm256_load_ps(&b_vec[8]);
 
-                __m256 mA = _mm256_load_ps(&a_vec[k]);
-                __m256 mB = _mm256_load_ps(&b_vec[k]);
+            result0 = _mm256_fmadd_ps(mA0, mB0, result0);
+            result1 = _mm256_fmadd_ps(mA1, mB1, result1);
 
-                result = _mm256_fmadd_ps(mA, mB, result);
+            float reduced_result = 0;
+            float reduced_result0 = 0; 
+            float reduced_result1 = 0; 
+            oj__reduce_mm256(result0, reduced_result0);
+            oj__reduce_mm256(result1, reduced_result1);
 
-                c_vec[b_i] += a_vec[k] * b_vec[k];
-                k += 8;
-            }
+            reduced_result = reduced_result0 + reduced_result1;
 
-            float *farr = (float *)&result;
-            c_vec[b_i] = 
-                farr[0] + farr[1] + farr[2] + farr[3] +
-                farr[4] + farr[5] + farr[6] + farr[7];
-
-            while (k < a.dim) {
-                c_vec[b_i] += a_vec[k] * b_vec[k];
-                k++;
-            }
+            c_vec[b_i] = alpha * reduced_result + beta * c_vec[b_i];
         }
     }
 }
 
+// #include <openblas/cblas.h>
 #include <cblas.h>
 
 // C = alpha*a*b + beta*c
@@ -462,7 +483,7 @@ internal void oj__multiply_vectors_blas(
         Vectors c,
         float alpha, 
         float beta) {
-    timeFunction; 
+    // timeFunction; 
 
     float *A = a.vecs;
     float *BT = t_b.vecs;
@@ -551,7 +572,8 @@ internal int oj__random_from_cumsum(float *cumsum, int n) {
 internal void oj__kmeans_plus_plus_init(
         Vectors centroids,
         Vectors subvectors,
-        float *min_distances2) {
+        float *min_distances2,
+        float *subvector_sqr_norms) {
 
     oj__vector_copy(
             oj__get_random_vector(subvectors), 
@@ -561,7 +583,16 @@ internal void oj__kmeans_plus_plus_init(
     float *cumsum = malloc(sizeof(float) * subvectors.n);
     assert(cumsum);
 
+    // float centroid_sqr_norm = oj__calculate_sqr_norm(centroids, 0);
+// #pragma omp parallel for 
     for (int i = 0; i < subvectors.n; i++) {
+        // float norms = subvector_sqr_norms[i] + centroid_sqr_norm;
+        //
+        // float *centroid = oj__get_vector(centroids, 0);
+        // float *subvector = oj__get_vector(subvectors, i);
+        // min_distances2[i] = norms +
+        //     -2 * oj__vector_dotproduct(centroid, subvector, centroids.dim);
+
         min_distances2[i] = oj__vector_distance2(
                 oj__get_vector(centroids, 0),
                 oj__get_vector(subvectors, i),
@@ -581,7 +612,15 @@ internal void oj__kmeans_plus_plus_init(
                 oj__get_vector(centroids, c),
                 subvectors.dim);
 
+// #pragma omp parallel for 
         for (int i = 0; i < subvectors.n; i++) {
+            // float norms = subvector_sqr_norms[i] + centroid_sqr_norm;
+            //
+            // float *centroid = oj__get_vector(centroids, 0);
+            // float *subvector = oj__get_vector(subvectors, i);
+            // float centroid_distance2 = norms +
+            //     -2 * oj__vector_dotproduct(centroid, subvector, centroids.dim);
+
             float centroid_distance2 = 
                 oj__vector_distance2(
                         oj__get_vector(centroids, c),
@@ -620,13 +659,7 @@ internal void oj__calculate_sqr_norms(Vectors vectors, float *dest) {
     timeFunction;
 
     for (int i = 0; i < vectors.n; i++) {
-        float sqr_norm = 0;
-        for (int j = 0; j < vectors.dim; j++) {
-            float v = vectors.vecs[i * vectors.dim + j];
-            sqr_norm += v * v;
-        }
-
-        dest[i] = sqr_norm;
+        dest[i] = oj__calculate_sqr_norm(vectors, i);
     }
 }
 
@@ -657,12 +690,13 @@ internal void oj__get_distances(
     //
     
     {
-        timeBlock("Add sqr norms");
-        #pragma omp parallel for
+        timeBandwidth("Add sqr norms", 
+                subvectors.n * centroids.n * sizeof(float));
+        // #pragma omp parallel for
         for (int i = 0; i < subvectors.n; i++) {
             for (int j = 0; j < centroids.n; j++) {
                 int pos = i * centroids.n + j;
-                float dotproduct = distances[pos]; 
+                // float dotproduct = distances[pos]; 
                 distances[pos] = 
                     subvector_sqr_norms[i]
                     + centroid_sqr_norms[j];
@@ -671,7 +705,6 @@ internal void oj__get_distances(
     }
 
     oj__multiply_vectors_blas(subvectors, centroids, dotproduct_vectors, -2, 1);
-
 }
 
 internal void oj__get_clusters_old(
@@ -705,8 +738,9 @@ internal void oj__get_clusters(
         int *cluster_amount, 
         float *distances, 
         float *a_block, float *b_panel) {
-    timeFunction;
+    // timeFunction;
 
+    /*
     oj__get_distances(
             subvectors,
             subvector_sqr_norms,
@@ -714,31 +748,39 @@ internal void oj__get_clusters(
             centroid_sqr_norms,
             distances, 
             a_block, a_block);
+            */
+
+    // NOTE(fede): Instead of calculating the distance, needing to add the 
+    //              square norms to each distance before the following loop, 
+    //              we can integrate the square norm calculation here.
+    oj__calculate_sqr_norms(centroids, centroid_sqr_norms);
+
+    Vectors dotproduct_vectors = {
+        .vecs = distances, 
+        .n = subvectors.n,
+        .dim = centroids.n,
+    };
+    oj__multiply_vectors_blas(subvectors, centroids, dotproduct_vectors, -2, 0);
 
     #pragma omp parallel for
     for (int i = 0; i < subvectors.n; i++) {
         float *subvector = oj__get_vector(subvectors, i);
 
         float min_distance = distances[i * centroids.dim];
+        min_distance += centroid_sqr_norms[0];
+
         int closest_centroid = 0;
 
         for (int j = 1; j < centroids.n; j++) {
-            float distance = distances[i * centroids.n + j];
+            float distance = distances[i * centroids.n + j] 
+                + centroid_sqr_norms[j];
             if (min_distance > distance) {
                 closest_centroid = j; 
                 min_distance = distance;
             } 
-
-#if 0
-            float *centroid = oj__get_vector(centroids, j);
-            float calculated_distance = oj__vector_distance2(
-                        subvector,
-                        centroid,
-                        subvectors.dim);
-            assert(distance + 0.005 >= calculated_distance 
-                    && distance - 0.005 <= calculated_distance);
-#endif
         }
+
+        min_distance += subvector_sqr_norms[i];
 
         float *vec = oj__get_vector(subvectors, i);
         float *cluster_sum = oj__get_vector(
@@ -755,12 +797,12 @@ internal void oj__update_centroids(
         Vectors centroids,
         Vectors cluster_sums,
         int *cluster_amount,
-        bool *should_stop) {
+        oj__bool *should_stop) {
     timeFunction;
 
     // TODO(fede): parametize this
     const float epsilon = 0.00001;
-    *should_stop = true;
+    *should_stop = oj__true;
 
     for (int i = 0; i < centroids.n; i++) {
         float *centroid = oj__get_vector(centroids, i);
@@ -778,12 +820,12 @@ internal void oj__update_centroids(
                         centroid,
                         new_centroid,
                         subvectors.dim) > epsilon) {
-                *should_stop = false;
+                *should_stop = oj__false;
             }
 
             oj__vector_copy(new_centroid, centroid, subvectors.dim);
         } else {
-            *should_stop = false;
+            *should_stop = oj__false;
             float *new_centroid = oj__get_random_vector(subvectors);
             oj__vector_copy(new_centroid, centroid, subvectors.dim);
         }
@@ -805,16 +847,16 @@ internal void oj__get_kmeans_cluster_centroids(
 
     srand(07734); // hello
 
-    float *subvector_sqr_norms = aligned_alloc(32, 
+    float *subvector_sqr_norms = oj__aligned_alloc(32, 
             sizeof(float) * subvectors.n);
     assert(subvector_sqr_norms);
     oj__calculate_sqr_norms(subvectors, subvector_sqr_norms);
 
-    float *centroid_sqr_norms = aligned_alloc(32,
+    float *centroid_sqr_norms = oj__aligned_alloc(32,
             sizeof(float) * centroids.n);
     assert(centroid_sqr_norms);
 
-    float *distances = aligned_alloc(32,
+    float *distances = oj__aligned_alloc(32,
             sizeof(float) * subvectors.n * centroids.n); 
     assert(distances);
 
@@ -826,13 +868,17 @@ internal void oj__get_kmeans_cluster_centroids(
         oj__kmeans_plus_plus_init(
                 centroids,
                 subvectors,
-                subvector_min_distances2);
+                subvector_min_distances2,
+                subvector_sqr_norms);
     }
 
-    bool should_stop = false;
+    oj__bool should_stop = oj__false;
 
     {
-        timeBlock("Kmeans calculate centroids");
+        // timeBlock("Kmeans calculate centroids");
+        timeBandwidth("Kmeans calculate centroids",
+                subvectors.n * subvectors.dim * sizeof(float) + 
+                centroids.n * centroids.dim * sizeof(float));
         for (int i = 0; !should_stop && i < max_iterations; i++) {
             oj__clear_array(cluster_sums.vecs,
                     cluster_sums.n * cluster_sums.dim,
@@ -864,9 +910,9 @@ internal void oj__get_kmeans_cluster_centroids(
         }
     }
 
-    free(subvector_sqr_norms);
-    free(centroid_sqr_norms);
-    free(distances);
+    oj__aligned_free(subvector_sqr_norms);
+    oj__aligned_free(centroid_sqr_norms);
+    oj__aligned_free(distances);
 }
 
 // TODO(fede): this will allocate memory, pass arena to it.
@@ -886,12 +932,12 @@ void index_pq_train(IndexPQ *index, float *vectors, int n_vectors) {
 
     // NOTE(fede): Allow user to query length and allocate this themselves
     if (!index->codebook)
-        index->codebook = aligned_alloc(32, codebook_size);
+        index->codebook = oj__aligned_alloc(32, codebook_size);
 
     assert(index->codebook);
 
     Vectors subvectors = {
-        .vecs = aligned_alloc(32,
+        .vecs = oj__aligned_alloc(32,
                 index->subvector_dimension *
                 // index->n_subvectors * 
                 n_vectors *
@@ -915,7 +961,7 @@ void index_pq_train(IndexPQ *index, float *vectors, int n_vectors) {
             index->centroids_per_page * sizeof(int));
     assert(prealloced_cluster_amount);
 
-    float *preallocated_subvector_distances2 = malloc(
+    float *preallocated_subvector_distances2 = oj__aligned_alloc(32,
             subvectors.n * sizeof(float));
     assert(preallocated_subvector_distances2);
 
@@ -958,7 +1004,7 @@ void index_pq_train(IndexPQ *index, float *vectors, int n_vectors) {
 
     free(prealloced_cluster_vector_sums);
     free(prealloced_cluster_amount);
-    free(preallocated_subvector_distances2);
+    oj__aligned_free(preallocated_subvector_distances2);
 
     // free(B_PANEL);
     // free(A_BLOCK);
@@ -1037,6 +1083,7 @@ IndexPQ_SearchResult index_pq_search(
         float *vectors,
         int n_vectors,
         int n_neighbours) {
+    timeFunction;
     IndexPQ_SearchResult result = {
         .n_vectors = n_vectors,
         .n_neighbours = n_neighbours, 
@@ -1052,9 +1099,9 @@ IndexPQ_SearchResult index_pq_search(
 
     float *distance_lookup = malloc(
             sizeof(float) * index->n_subvectors * index->centroids_per_page);
-    assert(result.indices);
+    assert(distance_lookup);
     oj__clear_array(
-            result.indices,
+            distance_lookup,
             index->n_subvectors * index->centroids_per_page,
             0);
 

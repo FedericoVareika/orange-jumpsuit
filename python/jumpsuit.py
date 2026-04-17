@@ -1,6 +1,7 @@
 import ctypes
 import numpy as np
 import os
+import platform
 
 # 1. Define the C structs in Python
 class C_IndexPQ(ctypes.Structure):
@@ -27,8 +28,29 @@ class C_IndexPQ_SearchResult(ctypes.Structure):
 
 # 2. Load the shared library
 # Adjust the path/extension depending on your OS (e.g., .dll for Windows)
-lib_path = os.path.join(os.path.dirname(__file__), "libjumpsuit.so")
-jumpsuit_lib = ctypes.CDLL(lib_path)
+# lib_path = os.path.join(os.path.dirname(__file__), "libjumpsuit.so")
+# jumpsuit_lib = ctypes.CDLL(lib_path)
+
+# 2. Load the shared library
+# Determine the library name based on the OS
+system = platform.system()
+libs_path = os.path.join(os.path.dirname(__file__), "libs")
+if system == "Windows":
+    lib_name = "libjumpsuit.dll"
+    os.add_dll_directory(libs_path)
+elif system == "Darwin":  # macOS
+    lib_name = "libjumpsuit.dylib"
+else:  # Linux and others
+    lib_name = "libjumpsuit.so"
+
+lib_path = os.path.join(os.path.dirname(__file__), lib_name)
+
+try:
+    # Use CDLL for standard C calling conventions (MinGW/GCC)
+    jumpsuit_lib = ctypes.CDLL(lib_path)
+except OSError as e:
+    raise OSError(f"Could not load the shared library at {lib_path}. "
+                  f"Ensure it is compiled for {system}.") from e
 
 # 3. Define function signatures
 # IndexPQ index_pq_init(int dimension, int n_subvectors, int n_bits_per_value);
