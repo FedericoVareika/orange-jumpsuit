@@ -38,7 +38,12 @@ jobs:
         uses: pypa/cibuildwheel@v2.17.0
         env:
           CIBW_SKIP: "pp* *musllinux*" # Skip PyPy and Musl to save time
-          CIBW_BEFORE_ALL_LINUX: "apt install libopenblas-dev"
+          CIBW_BEFORE_ALL_LINUX: > 
+            curl -LO https://github.com/OpenMathLib/OpenBLAS/releases/download/v0.3.27/OpenBLAS-0.3.27.tar.gz &&
+            tar -xzf OpenBLAS-0.3.27.tar.gz &&
+            cd OpenBLAS-0.3.27 &&
+            make DYNAMIC_ARCH=1 NO_SHARED=1 &&
+            make PREFIX=/usr install
 
       - name: Save Wheels temporarily
         uses: actions/upload-artifact@v4
