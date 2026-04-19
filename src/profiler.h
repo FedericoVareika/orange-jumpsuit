@@ -104,12 +104,10 @@ void print_elapsed_time(u64 total_clocks, u64 timer_freq,
 
     if (anchor->processed_byte_count) {
         f64 megabyte = 1024.0f * 1024.0f;
-        f64 gigabyte = megabyte * 1024.0f;
 
         f64 seconds = (f64)anchor->inclusive_elapsed_time / (f64)timer_freq;
         f64 bytes_per_second = (f64)anchor->processed_byte_count / seconds;
         f64 megabytes = (f64)anchor->processed_byte_count / (f64)megabyte;
-        f64 gigabytes_per_second = bytes_per_second / gigabyte;
         f64 megabytes_per_second = bytes_per_second / megabyte;
 
         // printf("  %.3fmb at %.2fgb/s", megabytes, gigabytes_per_second);
@@ -118,8 +116,6 @@ void print_elapsed_time(u64 total_clocks, u64 timer_freq,
 
     printf(")\n");
 }
-
-// printf("Total time: %f (Cpu freq: %llu)\n", total_time, cpu_freq);     \
 
 #define end_and_print_profiler()                                               \
     {                                                                          \

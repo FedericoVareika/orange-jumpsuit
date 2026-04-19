@@ -91,11 +91,6 @@ int main(int argc, char **argv) {
         int n_neighbours = 1;
         int n_vectors_search = query_vectors_info.n; 
 
-        int *search_indices = 
-            malloc(sizeof(int) * n_neighbours * n_vectors_search);
-        float *search_distances = 
-            malloc(sizeof(float) * n_neighbours * n_vectors_search);
-
         IndexPQ_SearchResult search_result = index_pq_search(
                 &index,
                 query_vectors,
