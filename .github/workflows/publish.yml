@@ -62,6 +62,12 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Prepare Python Build Files
+        run: |
+          cp python/pyproject.toml .
+          cp python/setup.py .
+          cp python/MANIFEST.in .
+
       - name: Build sdist
         run: pipx run build --sdist
 
