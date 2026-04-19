@@ -1,3 +1,5 @@
 include build_lib.sh
 include build_lib.bat
 include src/*
+recursive-include vendor *
+include python/dummy.c

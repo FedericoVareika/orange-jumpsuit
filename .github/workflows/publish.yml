@@ -1,10 +1,12 @@
-name: Build and Publish to PyPI
+name: Build and Publish
 
-# This tells GitHub to run this script ONLY when you publish a new Release on GitHub
 on:
+  # Triggers when a new GitHub Release is created
   release:
-    types: [published]
-  workflow_dispatch: 
+    types:
+      - published
+  # Allows you to trigger the workflow manually from the Actions tab
+  workflow_dispatch:
 
 jobs:
   build_wheels:
@@ -12,48 +14,25 @@ jobs:
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
-        # Spin up a Linux, Windows, and Mac machine
-        os: [ubuntu-latest] # , windows-latest, macos-latest
+        # We only need Ubuntu and Windows as per your requirements
+        os: [ubuntu-latest, windows-latest]
 
     steps:
       - uses: actions/checkout@v4
 
-      # Because you hid your python files, we temporarily bring them to the root for the build!
-      - name: Prepare Python Build Files (Linux/macOS)
-        if: runner.os != 'Windows'
-        run: |
-          cp python/pyproject.toml .
-          cp python/setup.py .
-          cp python/MANIFEST.in .
-
-      - name: Prepare Python Build Files (Windows)
-        if: runner.os == 'Windows'
-        run: |
-          copy python\pyproject.toml .
-          copy python\setup.py .
-          copy python\MANIFEST.in .
-
-      # This is the magic tool that builds for every Python version
       - name: Build wheels
         uses: pypa/cibuildwheel@v2.17.0
         env:
-          CIBW_SKIP: "pp* *musllinux*" # Skip PyPy and Musl to save time
+          # LINUX: The manylinux containers are based on CentOS (manylinux2014) 
+          # or AlmaLinux (manylinux_2_28). This command ensures openblas is installed 
+          # before your setup.py/pyproject.toml is executed.
+          CIBW_BEFORE_ALL_LINUX: "yum install -y openblas-devel || dnf install -y openblas-devel"
+          
+          # Optional but recommended: Skip 32-bit builds and PyPy if you don't support them.
+          # It saves a lot of build time.
+          CIBW_SKIP: "*-win32 *_i686 pp*"
 
-          # Force cibuildwheel to use a modern Linux container (glibc 2.28)
-          CIBW_MANYLINUX_X86_64_IMAGE: manylinux_2_28
-
-          # 1. Download Miniconda
-          # 2. Install it silently to /opt/conda
-          # 3. Use conda to install openblas from conda-forge
-          # 4. Copy the headers and libraries to /usr/ so gcc can find them
-          CIBW_BEFORE_ALL_LINUX: >
-            curl -O https://repo.anaconda.com/miniconda/Miniconda3-latest-Linux-x86_64.sh &&
-            bash Miniconda3-latest-Linux-x86_64.sh -b -p /opt/conda &&
-            /opt/conda/bin/conda install -y -c conda-forge openblas &&
-            cp /opt/conda/include/cblas.h /usr/include/ &&
-            cp -P /opt/conda/lib/libopenblas* /usr/lib/
-
-      - name: Save Wheels temporarily
+      - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:
           name: cibw-wheels-${{ matrix.os }}-${{ strategy.job-index }}
@@ -65,42 +44,34 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Prepare Python Build Files
-        run: |
-          cp python/pyproject.toml .
-          cp python/setup.py .
-          cp python/MANIFEST.in .
-
       - name: Build sdist
         run: pipx run build --sdist
 
-      - name: Save sdist temporarily
+      - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
           name: cibw-sdist
           path: dist/*.tar.gz
 
-  publish-to-pypi:
-    if: false # testing
-    name: Publish Python distribution to PyPI
+  upload_pypi:
+    name: Upload to PyPI
     needs: [build_wheels, build_sdist]
     runs-on: ubuntu-latest
-    
-    # This environment name matches what you will set up in PyPI
-    environment:
-      name: pypi
-      url: https://pypi.org/p/orange-jumpsuit # Update if your PyPI project name is different
-      
+    # Specifies the GitHub environment for PyPI Trusted Publishing
+    environment: pypi
     permissions:
-      id-token: write  # IMPORTANT: This grants PyPI permission to trust GitHub
-
+      id-token: write # Required for PyPI Trusted Publishing
+    
+    # Only upload to PyPI if this was triggered by a published release
+    if: github.event_name == 'release' && github.event.action == 'published'
+    
     steps:
-      - name: Download all the dists built in the previous jobs
+      - name: Download all artifacts
         uses: actions/download-artifact@v4
         with:
           pattern: cibw-*
           path: dist
           merge-multiple: true
 
-      - name: Publish distribution to PyPI
+      - name: Publish package to PyPI
         uses: pypa/gh-action-pypi-publish@release/v1

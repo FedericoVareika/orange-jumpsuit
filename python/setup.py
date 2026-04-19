@@ -5,7 +5,6 @@ import shutil
 from setuptools import setup, Extension, find_packages
 from setuptools.command.build_ext import build_ext
 
-# The directory containing setup.py
 ROOT_DIR = os.path.dirname(os.path.abspath(__file__))
 
 class CustomBuild(build_ext):
@@ -27,16 +26,38 @@ class CustomBuild(build_ext):
         except subprocess.CalledProcessError as e:
             sys.exit(f"Error: C library build failed with exit code {e.returncode}")
 
-        # 3. Move the compiled library into the Python package folder
-        # Adjust the source path depending on where your scripts output the library
+        # 3. Move the compiled library
         source_lib = os.path.join(ROOT_DIR, "build", "lib", lib_name) 
-        target_lib = os.path.join(ROOT_DIR, "python", "orange_jumpsuit", lib_name)
+
+        # --- THE FIX IS HERE ---
+        # A. Target for local development (Source Tree)
+        source_target_dir = os.path.join(ROOT_DIR, "python", "orange_jumpsuit")
+        os.makedirs(source_target_dir, exist_ok=True)
+        
+        # B. Target for the Wheel package (Build Tree)
+        # self.build_lib points to the temporary folder where the wheel is assembled
+        wheel_target_dir = os.path.join(self.build_lib, "orange_jumpsuit")
+        os.makedirs(wheel_target_dir, exist_ok=True)
 
         if os.path.exists(source_lib):
-            shutil.copy(source_lib, target_lib)
-            print(f"Copied {lib_name} to {target_lib}")
+            # Copy to both locations
+            shutil.copy(source_lib, os.path.join(source_target_dir, lib_name))
+            shutil.copy(source_lib, os.path.join(wheel_target_dir, lib_name))
+            print(f"Copied {lib_name} to wheel build directory.")
         else:
             sys.exit(f"Error: Expected output library {source_lib} not found!")
+
+        # Do the exact same thing for the OpenBLAS DLL on Windows
+        if sys.platform == "win32":
+            openblas_dll_name = "libopenblas.dll" 
+            source_openblas = os.path.join(ROOT_DIR, "vendor", "openblas", "bin", openblas_dll_name)
+            
+            if os.path.exists(source_openblas):
+                shutil.copy(source_openblas, os.path.join(source_target_dir, openblas_dll_name))
+                shutil.copy(source_openblas, os.path.join(wheel_target_dir, openblas_dll_name))
+                print(f"Copied {openblas_dll_name} to wheel build directory.")
+            else:
+                sys.exit(f"Error: Expected OpenBLAS DLL at {source_openblas} not found!")
 
         # 4. Continue with the standard Python build
         super().run()
@@ -44,10 +65,8 @@ class CustomBuild(build_ext):
 setup(
     package_dir={"": "python"},
     packages=find_packages(where="python"),
-    # Include the .so/.dll files in the final package
     package_data={"orange_jumpsuit": ["*.so", "*.dll"]},
     include_package_data=True,
-    # The dummy extension forces a platform-specific wheel
-    ext_modules=[Extension("orange_jumpsuit._dummy", sources=[])],
+    ext_modules=[Extension("orange_jumpsuit._dummy", sources=["python/dummy.c"])],
     cmdclass={"build_ext": CustomBuild},
 )

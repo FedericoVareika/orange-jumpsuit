@@ -1,5 +1,6 @@
 build
 dist
+wheelhouse
 
 data/*
 data/!links.txt
