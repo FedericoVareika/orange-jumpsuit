@@ -25,19 +25,12 @@ class C_IndexPQ_SearchResult(ctypes.Structure):
         ("distances", ctypes.POINTER(ctypes.c_float)),
     ]
 
-
-# 2. Load the shared library
-# Adjust the path/extension depending on your OS (e.g., .dll for Windows)
-# lib_path = os.path.join(os.path.dirname(__file__), "libjumpsuit.so")
-# jumpsuit_lib = ctypes.CDLL(lib_path)
-
 # 2. Load the shared library
 # Determine the library name based on the OS
 system = platform.system()
-libs_path = os.path.join(os.path.dirname(__file__), "libs")
 if system == "Windows":
     lib_name = "libjumpsuit.dll"
-    os.add_dll_directory(libs_path)
+    # os.add_dll_directory(libs_path)
 elif system == "Darwin":  # macOS
     lib_name = "libjumpsuit.dylib"
 else:  # Linux and others

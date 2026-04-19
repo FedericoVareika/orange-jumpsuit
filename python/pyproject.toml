@@ -1,0 +1,18 @@
+[build-system]
+requires = ["setuptools", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "orange-jumpsuit"
+version = "0.1.0"
+description = "Fast Product Quantization index in C with Python bindings"
+readme = "README.md"
+requires-python = ">=3.8"
+authors = [
+  { name="Federico Vareika", email="fede.vareika@gmail.com" }
+]
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: Linux, Windows",
+]

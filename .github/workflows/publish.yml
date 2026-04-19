@@ -1,0 +1,90 @@
+name: Build and Publish to PyPI
+
+# This tells GitHub to run this script ONLY when you publish a new Release on GitHub
+on:
+  release:
+    types: [published]
+
+jobs:
+  build_wheels:
+    name: Build wheels on ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        # Spin up a Linux, Windows, and Mac machine
+        os: [ubuntu-latest, windows-latest, macos-latest]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      # Because you hid your python files, we temporarily bring them to the root for the build!
+      - name: Prepare Python Build Files (Linux/macOS)
+        if: runner.os != 'Windows'
+        run: |
+          cp python/pyproject.toml .
+          cp python/setup.py .
+          cp python/MANIFEST.in .
+
+      - name: Prepare Python Build Files (Windows)
+        if: runner.os == 'Windows'
+        run: |
+          copy python\pyproject.toml .
+          copy python\setup.py .
+          copy python\MANIFEST.in .
+
+      # This is the magic tool that builds for every Python version
+      - name: Build wheels
+        uses: pypa/cibuildwheel@v2.17.0
+        env:
+          CIBW_SKIP: "pp* *musllinux*" # Skip PyPy and Musl to save time
+
+      - name: Save Wheels temporarily
+        uses: actions/upload-artifact@v4
+        with:
+          name: cibw-wheels-${{ matrix.os }}-${{ strategy.job-index }}
+          path: ./wheelhouse/*.whl
+
+  build_sdist:
+    name: Build source distribution
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Prepare Python Build Files
+        run: |
+          cp python/pyproject.toml .
+          cp python/setup.py .
+          cp python/MANIFEST.in .
+
+      - name: Build sdist
+        run: pipx run build --sdist
+
+      - name: Save sdist temporarily
+        uses: actions/upload-artifact@v4
+        with:
+          name: cibw-sdist
+          path: dist/*.tar.gz
+
+  publish-to-pypi:
+    name: Publish Python distribution to PyPI
+    needs: [build_wheels, build_sdist]
+    runs-on: ubuntu-latest
+    
+    # This environment name matches what you will set up in PyPI
+    environment:
+      name: pypi
+      url: https://pypi.org/p/orange-jumpsuit # Update if your PyPI project name is different
+      
+    permissions:
+      id-token: write  # IMPORTANT: This grants PyPI permission to trust GitHub
+
+    steps:
+      - name: Download all the dists built in the previous jobs
+        uses: actions/download-artifact@v4
+        with:
+          pattern: cibw-*
+          path: dist
+          merge-multiple: true
+
+      - name: Publish distribution to PyPI
+        uses: pypa/gh-action-pypi-publish@release/v1
