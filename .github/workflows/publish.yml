@@ -20,6 +20,20 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Prepare Python Build Files (Linux/macOS)
+        if: runner.os != 'Windows'
+        run: |
+          cp python/pyproject.toml .
+          cp python/setup.py .
+          cp python/MANIFEST.in .
+
+      - name: Prepare Python Build Files (Windows)
+        if: runner.os == 'Windows'
+        run: |
+          copy python\pyproject.toml .
+          copy python\setup.py .
+          copy python\MANIFEST.in .
+
       - name: Build wheels
         uses: pypa/cibuildwheel@v2.17.0
         env:
