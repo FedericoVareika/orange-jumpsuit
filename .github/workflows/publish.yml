@@ -4,6 +4,7 @@ name: Build and Publish to PyPI
 on:
   release:
     types: [published]
+  workflow_dispatch: 
 
 jobs:
   build_wheels:
@@ -36,15 +37,8 @@ jobs:
       - name: Build wheels
         uses: pypa/cibuildwheel@v2.17.0
         env:
-          CIBW_SKIP: "pp* *musllinux*" # Skip PyPy and Musl to save time
+          CIBW_SKIP: "pp* *musllinux* *macos*" # Skip PyPy and Musl to save time
           CIBW_BEFORE_ALL_LINUX: "yum install -y openblas-devel"
-
-          CIBW_BEFORE_ALL_MACOS: "brew install openblas"
-          
-          # Tell macOS where to find the headers during compilation
-          # (Homebrew doesn't link OpenBLAS globally by default)
-          C_INCLUDE_PATH: "/usr/local/opt/openblas/include"
-          LIBRARY_PATH: "/usr/local/opt/openblas/lib"
 
       - name: Save Wheels temporarily
         uses: actions/upload-artifact@v4
@@ -74,6 +68,7 @@ jobs:
           path: dist/*.tar.gz
 
   publish-to-pypi:
+    if: false # testing -- do not publish
     name: Publish Python distribution to PyPI
     needs: [build_wheels, build_sdist]
     runs-on: ubuntu-latest
