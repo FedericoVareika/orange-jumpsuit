@@ -18,6 +18,8 @@ echo "Compiling with $CC..."
 $CC -std=gnu11 \
     $common_flags_external \
     src/jumpsuit.c \
+    $CPPFLAGS \
+    $CFLAGS \
     -shared \
     -D'PROFILER=0' \
     -o build/lib/libjumpsuit.$EXTENSION $linker_flags
