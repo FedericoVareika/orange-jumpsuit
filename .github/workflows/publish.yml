@@ -38,6 +38,10 @@ jobs:
         uses: pypa/cibuildwheel@v2.17.0
         env:
           CIBW_SKIP: "pp* *musllinux*" # Skip PyPy and Musl to save time
+
+          # Force cibuildwheel to use a modern Linux container (glibc 2.28)
+          CIBW_MANYLINUX_X86_64_IMAGE: manylinux_2_28
+
           # 1. Download Miniconda
           # 2. Install it silently to /opt/conda
           # 3. Use conda to install openblas from conda-forge
