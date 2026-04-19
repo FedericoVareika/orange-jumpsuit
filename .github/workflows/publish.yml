@@ -43,7 +43,7 @@ jobs:
             tar -xzf OpenBLAS-0.3.27.tar.gz &&
             cd OpenBLAS-0.3.27 &&
             make DYNAMIC_ARCH=1 NO_SHARED=1 &&
-            make PREFIX=/usr install
+            make PREFIX=/usr NO_SHARED=1 install
 
       - name: Save Wheels temporarily
         uses: actions/upload-artifact@v4
