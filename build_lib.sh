@@ -6,8 +6,8 @@ else
     EXTENSION="so"
 fi
 
-common_flags_external="-O3 -ffast-math -W -m64"
-linker_flags="-lm -mavx2 -mfma -lopenblas" # -lopenblas -fopenmp
+common_flags_external="-O3 -ffast-math -Wall -m64"
+linker_flags="-lm -lopenblas" 
 
 mkdir -p build/lib
 
@@ -17,7 +17,6 @@ echo "Compiling with $CC..."
 
 $CC -std=gnu11 \
     $common_flags_external \
-    -mavx2 -mfma \
     src/jumpsuit.c \
     -shared \
     -D'PROFILER=0' \

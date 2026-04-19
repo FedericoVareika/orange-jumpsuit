@@ -1,0 +1,8 @@
+numpy
+matplotlib 
+opencv-python 
+jupyterlab 
+ipykernel 
+jupyterlab-vim 
+faiss-cpu
+pandas

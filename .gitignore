@@ -1,8 +1,12 @@
 build
-visualization
+dist
 
 data/*
 data/!links.txt
+
+notebook-example/__pycache__
+notebook-example/data/*
+notebook-example/data/!links.txt
 
 .cache
 
@@ -10,3 +14,6 @@ data/!links.txt
 
 transfer.iso
 perf
+
+python/*.egg-info
+python/**/__pycache__
