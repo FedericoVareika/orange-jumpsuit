@@ -37,6 +37,10 @@ jobs:
       - name: Build wheels
         uses: pypa/cibuildwheel@v2.17.0
         env:
+
+          CIBW_MANYLINUX_X86_64_IMAGE: manylinux_2_28
+          CIBW_MANYLINUX_AARCH64_IMAGE: manylinux_2_28
+
           # LINUX: The manylinux containers are based on CentOS (manylinux2014) 
           # or AlmaLinux (manylinux_2_28). This command ensures openblas is installed 
           # before your setup.py/pyproject.toml is executed.
