@@ -37,6 +37,14 @@ jobs:
         uses: pypa/cibuildwheel@v2.17.0
         env:
           CIBW_SKIP: "pp* *musllinux*" # Skip PyPy and Musl to save time
+          CIBW_BEFORE_ALL_LINUX: "yum install -y openblas-devel"
+
+          CIBW_BEFORE_ALL_MACOS: "brew install openblas"
+          
+          # Tell macOS where to find the headers during compilation
+          # (Homebrew doesn't link OpenBLAS globally by default)
+          C_INCLUDE_PATH: "/usr/local/opt/openblas/include"
+          LIBRARY_PATH: "/usr/local/opt/openblas/lib"
 
       - name: Save Wheels temporarily
         uses: actions/upload-artifact@v4
