@@ -38,7 +38,7 @@ jobs:
         uses: pypa/cibuildwheel@v2.17.0
         env:
           CIBW_SKIP: "pp* *musllinux*" # Skip PyPy and Musl to save time
-          CIBW_BEFORE_ALL_LINUX: "yum install -y openblas-devel"
+          CIBW_BEFORE_ALL_LINUX: "sudo apt install libopenblas-dev"
 
       - name: Save Wheels temporarily
         uses: actions/upload-artifact@v4
