@@ -15,7 +15,7 @@ jobs:
     strategy:
       matrix:
         # We only need Ubuntu and Windows as per your requirements
-        os: [ubuntu-latest, windows-latest]
+        os: [ubuntu-latest] # , windows-latest
 
     steps:
       - uses: actions/checkout@v4
