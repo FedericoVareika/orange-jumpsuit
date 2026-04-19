@@ -38,12 +38,16 @@ jobs:
         uses: pypa/cibuildwheel@v2.17.0
         env:
           CIBW_SKIP: "pp* *musllinux*" # Skip PyPy and Musl to save time
-          CIBW_BEFORE_ALL_LINUX: > 
-            curl -LO https://github.com/OpenMathLib/OpenBLAS/releases/download/v0.3.27/OpenBLAS-0.3.27.tar.gz &&
-            tar -xzf OpenBLAS-0.3.27.tar.gz &&
-            cd OpenBLAS-0.3.27 &&
-            make DYNAMIC_ARCH=1 NO_SHARED=1 &&
-            make PREFIX=/usr NO_SHARED=1 install
+          # 1. Download Miniconda
+          # 2. Install it silently to /opt/conda
+          # 3. Use conda to install openblas from conda-forge
+          # 4. Copy the headers and libraries to /usr/ so gcc can find them
+          CIBW_BEFORE_ALL_LINUX: >
+            curl -O https://repo.anaconda.com/miniconda/Miniconda3-latest-Linux-x86_64.sh &&
+            bash Miniconda3-latest-Linux-x86_64.sh -b -p /opt/conda &&
+            /opt/conda/bin/conda install -y -c conda-forge openblas &&
+            cp /opt/conda/include/cblas.h /usr/include/ &&
+            cp -P /opt/conda/lib/libopenblas* /usr/lib/
 
       - name: Save Wheels temporarily
         uses: actions/upload-artifact@v4
