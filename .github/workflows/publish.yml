@@ -50,7 +50,7 @@ jobs:
 
           # Optional but recommended: Skip 32-bit builds and PyPy if you don't support them.
           # It saves a lot of build time.
-          CIBW_SKIP: "*-win32 *_i686 pp*"
+          CIBW_SKIP: "*-win32 *_i686 pp* *musllinux*"
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
