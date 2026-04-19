@@ -13,7 +13,7 @@ jobs:
     strategy:
       matrix:
         # Spin up a Linux, Windows, and Mac machine
-        os: [ubuntu-latest, windows-latest, macos-latest]
+        os: [ubuntu-latest, windows-latest] # , macos-latest
 
     steps:
       - uses: actions/checkout@v4
@@ -37,7 +37,7 @@ jobs:
       - name: Build wheels
         uses: pypa/cibuildwheel@v2.17.0
         env:
-          CIBW_SKIP: "pp* *musllinux* *macos*" # Skip PyPy and Musl to save time
+          CIBW_SKIP: "pp* *musllinux*" # Skip PyPy and Musl to save time
           CIBW_BEFORE_ALL_LINUX: "yum install -y openblas-devel"
 
       - name: Save Wheels temporarily
@@ -68,7 +68,7 @@ jobs:
           path: dist/*.tar.gz
 
   publish-to-pypi:
-    if: false # testing -- do not publish
+    if: false # testing
     name: Publish Python distribution to PyPI
     needs: [build_wheels, build_sdist]
     runs-on: ubuntu-latest
