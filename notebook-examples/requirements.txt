@@ -6,3 +6,5 @@ ipykernel
 jupyterlab-vim 
 faiss-cpu
 pandas
+torch 
+sentence_transformers

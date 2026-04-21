@@ -1,5 +1,5 @@
 import numpy as np
-from jumpsuit import IndexPQ
+from orange_jumpsuit import IndexPQ
 
 # Generate fake data
 np.random.seed(42)

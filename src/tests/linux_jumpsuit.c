@@ -70,8 +70,6 @@ int main(int argc, char **argv) {
     // NOTE(fede): k* = 256, m = 8 is recommended when d = 128.
     //      n_bits_per_value  = 8 (when k* = 256)
     IndexPQ index = index_pq_init(base_vectors_info.dimension, 8, 8);
-
-    // index_pq_train(&index, base_vectors, base_vectors_info.n); 
     
     printf("Training %d vectors.\n", learn_vectors_info.n);
     index_pq_train(&index, learn_vectors, learn_vectors_info.n); 
@@ -81,13 +79,7 @@ int main(int argc, char **argv) {
 
     free(base_vectors);
 
-    // for (int i = 0; i < index.subvector_dimension; i++) {
-    //     printf("%f, ", index.codebook[i]);
-    // }
-    // printf("\n");
-
     {
-        // int n_neighbours = 100;
         int n_neighbours = 1;
         int n_vectors_search = query_vectors_info.n; 
 
