@@ -5,9 +5,9 @@ wheelhouse
 data/*
 data/!links.txt
 
-notebook-example/__pycache__
-notebook-example/data/*
-notebook-example/data/!links.txt
+notebook-examples/__pycache__
+notebook-examples/data/**
+notebook-examples/data/!links.txt
 
 .cache
 
