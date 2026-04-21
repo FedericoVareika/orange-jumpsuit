@@ -21,6 +21,5 @@ $CC -std=gnu11 \
     $CPPFLAGS \
     $CFLAGS \
     -shared \
-    -D'PROFILER=0' \
     -o build/lib/libjumpsuit.$EXTENSION $linker_flags
 

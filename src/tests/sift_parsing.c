@@ -1,5 +1,5 @@
 #include <stdlib.h>
-#include "../platform_helpers.h"
+#include "platform_helpers.h"
 
 typedef struct {
     int n, dimension;

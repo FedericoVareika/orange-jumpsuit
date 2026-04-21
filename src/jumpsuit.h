@@ -1,6 +1,17 @@
 #ifndef JUMPSUIT_H
 #define JUMPSUIT_H
 
+#ifdef PROFILER
+#else 
+#define timeBandwidth(...)
+#define timeBlock(...)
+#define timeFunction
+#define beginProfiler
+#define endProfiler
+#define end_and_print_profiler(...)
+#define ProfilerEndOfCompilationUnit
+#endif
+
 /////////////////////////////////////////////////////////////////////
 // 
 // Function specifiers in case library is build/used as a shared library

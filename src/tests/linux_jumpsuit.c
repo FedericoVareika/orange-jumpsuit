@@ -3,7 +3,7 @@
 
 #include "basics.h"
 
-#include "../platform_helpers.h"
+#include "platform_helpers.h"
 #include "linux_helpers.c"
 #include "sift_parsing.c"
 
@@ -11,7 +11,7 @@
 #define PROFILER 1
 #endif
 
-#include "../profiler.h"
+#include "profiler.h"
 
 #define JUMPSUIT_IMPLEMENTATION
 #include "../jumpsuit.h"

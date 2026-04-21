@@ -1,4 +1,4 @@
-#include "../platform_helpers.h"
+#include "platform_helpers.h"
 
 #include <sys/stat.h>
 #include <sys/mman.h>
