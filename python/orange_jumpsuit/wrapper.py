@@ -115,5 +115,4 @@ class IndexPQ:
         distances = np.ctypeslib.as_array(result.distances, shape=(total_elements,)).reshape(n_vectors, n_neighbours).copy()
         indices = np.ctypeslib.as_array(result.indices, shape=(total_elements,)).reshape(n_vectors, n_neighbours).copy()
         
-        # Note: Be careful with memory leaks here! (See note below)
         return distances, indices
