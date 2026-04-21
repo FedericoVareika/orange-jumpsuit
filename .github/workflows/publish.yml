@@ -39,7 +39,8 @@ jobs:
           copy python\MANIFEST.in .
 
       - name: Build wheels
-        uses: pypa/cibuildwheel@v2.17.0
+        # uses: pypa/cibuildwheel@v2.17.0
+        uses: pypa/cibuildwheel@v2.22.0
         env:
 
           CIBW_MANYLINUX_X86_64_IMAGE: manylinux_2_28
