@@ -15,7 +15,7 @@ set "INCLUDE_FLAGS=/I"%OPENBLAS_DIR%\include""
 :: Setup compilation and linker flags
 set "COMMON_FLAGS=/O2 /fp:fast /W4"
 set "C_STD=/std:c11"
-set "DEFINES=/DPROFILER=0 /DOJ_EXPORT"
+set "DEFINES=/DOJ_EXPORT"
 
 :: --- UPDATED: Use the exact filename and specify the lib path ---
 set "LINKER_FLAGS=libopenblas.lib /LIBPATH:"%OPENBLAS_DIR%\lib""
