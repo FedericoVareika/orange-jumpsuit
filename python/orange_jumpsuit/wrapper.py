@@ -1,3 +1,9 @@
+
+# Gemini conversation for the first generation of this wrapper
+#    https://gemini.google.com/share/62c402d547e8
+#
+# NOTE(fede): this probably changed since then.
+
 import ctypes
 import numpy as np
 import os

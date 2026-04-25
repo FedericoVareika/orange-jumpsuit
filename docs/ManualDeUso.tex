@@ -1,0 +1,258 @@
+\section{Manual de Uso}
+
+Esta secci\'on detalla los pasos necesarios para integrar la librer\'ia
+\texttt{orange-jumpsuit} en proyectos de C y Python, as\'i como el flujo de
+trabajo recomendado para realizar b\'usquedas vectoriales.
+
+\subsection{Integraci\'on en C}
+
+La librería est\'a dise\~nada como un archivo de cabecera \'unico
+(\textit{header-only}), lo que facilita su portabilidad entre 
+proyectos.
+
+\subsubsection{Requisitos y Dependencias}
+Para compilar un proyecto que utilice \texttt{jumpsuit.h}, se requiere:
+\begin{itemize}
+    \item Un compilador compatible con C11 o superior.
+    \item La librería \textbf{OpenBLAS} (u otra implementaci\'on de BLAS) 
+      instalada en el sistema para las operaciones matriciales aceleradas.
+    \item En sistemas Linux, el script de construcci\'on de pruebas 
+      \texttt{build\_tests.sh} puede servir como referencia para la 
+      configuraci\'on del enlazador.
+\end{itemize}
+
+\subsubsection{Inclusi\'on en el Proyecto}
+Para utilizar la librer\'ia, simplemente incluya el archivo en su c\'odigo
+fuente. 
+En un archivo de C, debe definir \verb|JUMPSUIT\_IMPLEMENTATION|
+antes de la inclusi\'on para generar la implementaci\'on de las funciones:
+
+\begin{lstlisting}[language=C]
+#define JUMPSUIT_IMPLEMENTATION
+#include "jumpsuit.h"
+\end{lstlisting}
+
+\subsection{Flujo de Trabajo en C}
+
+El uso del \'indice sigue un ciclo de vida de cuatro etapas principales:
+inicialización, entrenamiento, adición de datos y búsqueda.
+
+\begin{enumerate}
+    \item \textbf{Inicialización}: 
+      Se definen las dimensiones del vector, el número de subespacios ($m$)
+      y la cantidad de bits por centroide ($k^*$).
+    \item \textbf{Entrenamiento}: 
+      Se provee un conjunto de vectores para calcular los centroides del
+      \verb|codebook|. 
+      Se recomienda que este conjunto sea representativo de los datos 
+      finales.
+    \item \textbf{Adici\'on}: 
+      Se cargan los vectores que formar\'an parte de la base de datos de 
+      b\'usqueda. En este punto, los vectores se comprimen a sus \'indices
+      correspondientes.
+    \item \textbf{B\'usqueda}: 
+      Se realiza la consulta para obtener los $k$ vecinos m\'as cercanos.
+\end{enumerate}
+
+\subsection{Integraci\'on en Python}
+
+Se provee un wrapper que puede instalarse directamente vía \texttt{pip} en
+sistemas Linux y Windows:
+
+\begin{lstlisting}[language=bash]
+pip install orange-jumpsuit
+\end{lstlisting}
+
+\subsubsection{Ejemplo de Uso en Python}
+El wrapper de Python abstrae la gesti\'on de memoria y permite interactuar con
+la librer\'ia utilizando arreglos de NumPy:
+
+\begin{lstlisting}[language=python]
+from orange_jumpsuit import IndexPQ
+
+# 1. Configuracion del indice
+index = IndexPQ(dimension=128, n_subvectors=8, n_bits_per_value=8)
+
+# 2. Entrenamiento y carga de datos
+index.train(data_entrenamiento)
+index.add(data_base)
+
+# 3. Busqueda de los 10 vecinos mas cercanos
+distancias, indices = index.search(query_vector, n_neighbours=10)
+\end{lstlisting}
+
+El wrapper esta hecho mayoritariamente con IA. El link a la conversaci\'on:
+\url{https://gemini.google.com/share/62c402d547e8}.
+
+\newpage
+
+Tambi\'en es importante aclarar que el compilado y publicado a PiPY se hace 
+mediante \href{https://cibuildwheel.pypa.io/en/stable/}{CiBuildWheels} y Github 
+Actions. Los documentos importantes son los siguientes: 
+
+\dirtree{%
+.1 orange-jumpsuit.
+.2 .github.
+.3 workflows. 
+.4 publish.yml.  
+.2 python.
+.3 dummy.c. 
+.3 MANIFEST.in. 
+.3 pyproject.toml. 
+.2 build\_python\_wheel.sh. 
+.2 build\_python\_wheel.bat. 
+}
+
+Como se compila en maquinas virtuales en GitHub, es posible que no se encuentre
+el \texttt{.whl} (programa compilado) correcto para la computadora del usuario
+publicado. 
+Dado esto, \texttt{pip} intenta compilar el programa con 
+\texttt{gcc/cl.exe}, entonces deben estar instalados y accesibles en la computadora.
+
+Como alternativa, se puede compilar con los scripts 
+\texttt{build\_python\_wheel[.bat/sh]} y luego correr 
+\begin{lstlisting}[language=bash]
+pip install [camino a ./dist/.whl]
+\end{lstlisting}
+en el entorno de python.
+
+De nuevo es importante aclarar que el proceso de publicaci\'on y compilado para 
+python fue hecho con ayuda de IA. El link a la conversaci\'on: 
+\url{https://gemini.google.com/share/4805b8db0b70}
+
+\subsection{Pruebas y Verificaci\'on}
+
+Para verificar la correcta instalaci\'on en entornos Linux, 
+se pueden descargar los datos (\texttt{siftsmall.tar.gz} en 
+\texttt{/datos/links.txt})
+y compilar el ejecutable de pruebas incluido en el repositorio:
+
+\begin{lstlisting}[language=bash]
+./build_tests.sh
+./build/tests/orange-jumpsuit
+\end{lstlisting}
+
+Este ejecutable realiza una prueba sobre las funciones expuestas por la 
+librer\'ia.
+
+\newpage
+
+\subsection{Ejemplos}
+
+El proyecto incluye dos \textit{Jupyter Notebooks} diseñados para demostrar 
+la utilidad pr\'actica de la librer\'ia \texttt{orange\_jumpsuit} y evaluar
+su rendimiento frente a soluciones est\'ndar de la industria como FAISS. 
+A continuaci\'on se detalla el prop\'osito y funcionamiento de cada uno.
+
+\subsection*{\texttt{SemanticSearch.ipynb}}
+
+Este notebook es c\'odigo levemente modifciado de un ejemplo de busqueda 
+sem\'antica con FAISS hecho por \textit{huggingface}:
+\url{https://huggingface.co/learn/llm-course/chapter5/6} \\
+
+\textbf{Prop\'osito:} 
+Ilustrar un caso de uso real en Procesamiento de Lenguaje Natural (NLP),
+demostrando c\'omo integrar la librer\'ia para implementar un motor de 
+b\'usqueda sem\'antica de documentos.
+
+\textbf{Funcionalidad del notebook}
+\begin{itemize}
+    \item \textbf{Carga de Datos:} 
+      Utiliza la librer\'ia \texttt{datasets} de HuggingFace para descargar 
+      y filtrar un corpus de texto real (ej. \textit{issues} y comentarios de
+      GitHub).
+    \item \textbf{Generaci\'on de Embeddings:} 
+      Emplea \texttt{transformers} y \texttt{PyTorch} con el modelo
+      pre-entrenado \texttt{multi-qa-mpnet-base-dot-v1} para convertir el
+      texto en vectores densos (dimensi\'on 768).
+    \item \textbf{Indexaci\'on y B\'usqueda:} 
+      Construye \'indices de cuantizaci\'on de producto (PQ) usando tanto FAISS
+      como \texttt{orange\_jumpsuit}.
+    \item \textbf{Comparativa Pr\'actica:} 
+      Ejecuta una consulta de ejemplo 
+      (\textit{"How can I load a dataset offline?"}),
+      mide los tiempos de ejecuci\'on de ambas herramientas y muestra
+      visualmente que los resultados recuperados (Top-5) por
+      \texttt{orange\_jumpsuit} son consistentes y relevantes.
+\end{itemize}
+
+\newpage 
+
+\subsection*{\texttt{ComparingTest.ipynb}}
+
+\textbf{Prop\'osito:} 
+Realizar una prueba de rendimiento que compara la precisi\'on y velocidad de 
+\texttt{orange\_jumpsuit} frente a FAISS.
+
+\textbf{Funcionalidad del notebook}
+\begin{itemize}
+    \item \textbf{Dataset Est\'andar:}
+      Carga el conjunto de datos \texttt{siftsmall}\footnote{
+      Estos datos se encuentran en \url{http://corpus-texmex.irisa.fr/}}, 
+      utilizado en la academia y la industria para evaluar estos algoritmos de
+      b\'usqueda aproximada de vecinos m\'as cercanos.
+    \item \textbf{Lectura de Archivos Binarios:} 
+      Implementa funciones para leer los vectores flotantes (\texttt{.fvecs})
+      y las respuestas correctas o \textit{groundtruth} (\texttt{.ivecs}).
+    \item \textbf{Evaluaci\'on de Rendimiento (Tiempos):}
+      Mide y compara estrictamente los tiempos de entrenamiento de los 
+      centroides, la indexaci\'on de los vectores base y el tiempo de respuesta
+      en las consultas (b\'usqueda).
+    \item \textbf{Evaluaci\'on de Precisi\'on (M\'etricas):} 
+      Analiza la calidad del \'indice calculando el \textbf{Recall@K} 
+      (\texttt{Recall@1}, \texttt{Recall@10} y \texttt{Recall@100}),
+      verificando qu\'e porcentaje de los verdaderos vecinos m\'as cercanos
+      fueron recuperados exitosamente por \texttt{orange\_jumpsuit} frente a 
+      FAISS. \footnote{
+      Cabe aclarar que \textit{SiftSmall} usa $100$ vectores de busqueda,
+      por ende brindando porcentajes de Recall\@n enteros.}
+\end{itemize}
+
+
+\begin{figure}[ht]
+\begin{center}
+\renewcommand{\arraystretch}{1.5}
+{
+    \rowcolors{2}{black!5}{black!10}
+    \begin{tabularx}{0.8\textwidth} {
+       >{\hsize=1\hsize\linewidth=\hsize}X 
+       >{\hsize=1\hsize\linewidth=\hsize\centering\arraybackslash}X 
+       >{\hsize=1\hsize\linewidth=\hsize\centering\arraybackslash}X }
+    % \begin{tabular}{| c | m{5cm} | m{5cm} |} 
+    \hline 
+
+    \rowcolor{white}
+     & \textbf{faiss} & \textbf{orange\_jumpsuit} \\
+
+    \hline
+
+    % \multicolumn{3}{l}{\hspace{10pt} Rendimiento (s)} \\
+    Rendimiento (s) & & \\
+
+    \hline 
+
+    Train   & $5.5077$ & $7.9994$ \\
+    Add     & $0.2758$ & $0.1743$ \\
+    Search  & $0.1139$ & $0.1674$ \\
+
+    \hline 
+
+    % \multicolumn{3}{l}{M\'etricas (\%)} \\
+    M\'etricas (\%) & & \\
+
+    \hline 
+
+    Recall@1    & $47\%$ & $46\%$ \\
+    Recall@10   & $87\%$ & $83\%$ \\
+    Recall@100  & $100\%$ & $100\%$ \\
+
+    \hline 
+    \end{tabularx}
+    % \end{tabular}
+}
+\end{center}
+
+\caption{\texttt{ComparingTest.ipynb} con el dataset \textit{SiftSmall}}
+\label{fig:comparingtest_siftsmall}
+
+\end{figure}

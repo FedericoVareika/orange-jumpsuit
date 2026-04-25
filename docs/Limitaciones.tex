@@ -1,0 +1,28 @@
+\section{Limitaciones de la implementaci\'on}
+
+La limitaci\'on mas importante de esta implementaci\'on es que no se puede 
+agregar vectores al \'indice mas de una vez. Esto no es sumamente importante 
+(al menos para los ejemplos vistos), pero es una mejora pendiente.
+
+\subsection*{Diferencias con el art\'iculo de referencia\cite{pqnns}.}
+
+El art\'iculo describiendo PQ para NNS\cite{pqnns} incluye varias mejoras al 
+algoritmo b\'asico.
+
+\begin{itemize}
+  \item\textbf{Busqueda con MaxHeap:} 
+    Para la busqueda de los $k$ vectores m\'as cercanos, el art\'iculo describe
+    el uso de la estructura de datos MaxHeap para mayor velocidad de
+    inserci\'on ordenada.
+  \item\textbf{Calculo de distancias con residuales:} 
+    Se usa un m\'etodo modificado para el c\'alculo de distancias, que requiere 
+    el c\'alculo de un vector residual (\(r(y) = y - q_c(y)\)) para un menor uso 
+    de memoria. No logr\'e encontrar esto en la implementaci\'on de FAISS 
+    tampoco.
+  \item\textbf{Tama\~no de los codigos cuantificados:} 
+    Uno de los parametros de \texttt{index\_pq\_init} es la cantidad de bits 
+    usados para el indexado a los centroides, que se usa para calcular la 
+    cantidad de centroides calculados. Sin embargo, si tenemos \texttt{n\_bits = 
+    8}, lo ideal ser\'ia guardar los codigos en 8 bits, pero por simplicidad los 
+    guardamos siempre en \texttt{int}s (32 bits).
+\end{itemize}

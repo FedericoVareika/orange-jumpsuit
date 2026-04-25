@@ -1,6 +1,10 @@
-## Indice de Quantizacion de Producto (PQ) para busqueda vectorial 
+## Indice de Busqueda Vectorial usando Cuantificacion de Productos (PQ)
 
 Esta libreria provee busqueda vectorial con PQ en C, con un wrapper de Python. 
+
+Inspirada por [FAISS](https://faiss.ai/index.html), 
+usando como base para el algoritmo:
+[Product quantization for nearest neighbor search](https://inria.hal.science/inria-00514462v2/document) 
 
 ## API
 

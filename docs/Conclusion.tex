@@ -1,0 +1,24 @@
+\section{Conclusi\'on}
+
+El desarrollo de la librer\'ia \texttt{orange-jumpsuit}
+ha permitido validar que es posible implementar un motor de b\'usqueda
+vectorial funcional y competitivo bajo una filosof\'ia de desarrollo de bajo
+nivel y m\'inimas dependencias en relativamente poco tiempo. 
+A lo largo de este trabajo, se ha logrado transformar los conceptos te\'oricos
+de la cuantificaci\'on de productos en una herramienta pr\'actica que equilibra
+la complejidad algor\'itmica con la eficiencia en sistemas modernos.
+
+Los resultados obtenidos en las pruebas comparativas contra FAISS demuestran
+que la implementación alcanza niveles de precisi\'on (Recall) similares
+en conjuntos de datos est\'andar como SiftSmall, logrando un 83\% de
+efectividad en la recuperación de los 10 vecinos más cercanos.
+Si bien existen diferencias en los tiempos de entrenamiento y
+b\'usqueda mayormente, el rendimiento de \texttt{orange-jumpsuit} con conjuntos
+de datos peque\~nos se aproxima al de FAISS, lo que destaca la efectividad
+de las optimizaciones mediante OpenBLAS y el manejo de memoria alineada.
+
+Finalmente, este trabajo no solo cumple con la implementaci\'on de un sistema
+de b\'usqueda eficiente, sino que establece una base s\'olida para futuras
+expansiones, como la gesti\'on din\'amica de vectores o el uso de estructuras
+de datos m\'as complejas para la inserci\'on ordenada. 
+

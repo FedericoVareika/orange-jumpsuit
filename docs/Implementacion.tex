@@ -1,0 +1,161 @@
+\section{Implementaci\'on}
+
+La implementaci\'on de la librer\'ia se encuentra en el archivo de cabecera
+\verb|jumpsuit.h|. Esta librer\'ia es \textit{header-only} 
+(o \textit{stb-style} por las librer\'ias de Sean Barret \cite{stbnothings}).
+
+Siguiendo una filosof\'ia de desarrollo de bajo nivel, se ha buscado minimizar
+las dependencias externas, utilizando principalmente la librer\'ia est\'andar
+de C y \verb|cblas.h| 
+(espec\'ificamente OpenBLAS\cite{openblas}, dado que es open-source)
+para optimizar operaciones matriciales.
+
+\subsection{Estructuras de Datos Principales}
+
+La librer\'ia gira en torno a la estructura \verb|IndexPQ|,
+la cual mantiene el estado del \'indice:
+
+\begin{lstlisting}[language=C, caption=Estructura IndexPQ]
+typedef struct {
+    int dimension;              // = d
+    int n_subvectors;           // = m
+    int n_bits_per_value;       // = log_2(k*)
+
+    int n_iter;
+
+    ////////////////////////////////////////////////////
+    // Calculated automatically based on init params:
+    
+    int centroids_per_page;     // k*
+    int subvector_dimension;
+
+    ////////////////////////////////////////////////////
+
+    ////////////////////////////////////////////////////
+    // Filled on train and add
+    
+    int n_vectors;              // = n
+
+                                //   (C_i = [c_1, c_2, ..., c_k*])
+    float *codebook;            // = [C_1, C_2, ..., C_m]
+
+                                //   (Idx_i = [idx_1, idx_2, ..., idx_m])
+    int *quantized_codes;       // = [Idx_1, Idx_2, ..., Idx_n]
+                                
+    ////////////////////////////////////////////////////
+} IndexPQ;
+\end{lstlisting}
+
+\newpage
+
+\begin{lstlisting}[language=C, caption=Estructura IndexPQ SearchResult]
+typedef struct {
+    int n_vectors;
+    int n_neighbours;
+
+    int *indices;
+    float *distances;
+} IndexPQ_SearchResult;
+\end{lstlisting}
+
+\newpage
+
+\subsection{API e Implementaci\'on de Funciones}
+
+\subsubsection{Inicializaci\'on}
+
+\begin{lstlisting}[language=C, caption=Inicializaci\'on]
+IndexPQ index_pq_init(
+  int dimension,
+  int n_subvectors,
+  int n_bits_per_value)
+\end{lstlisting}
+
+Esta funci\'on configura los hiperpar\'ametros del algoritmo.
+Calcula autom\'aticamente la dimensi\'on de los subvectores ($D/m$)
+y la cantidad de centroides necesarios por subespacio ($2^{bits}$).
+
+Adem\'as, establece por defecto 25 iteraciones para el proceso de entrenamiento
+de K-Means, el cual se puede cambiar manualmente antes de comenzarlo.
+
+\subsubsection{Entrenamiento:}
+
+\begin{lstlisting}[language=C, caption=Entrenamiento]
+void index_pq_train(IndexPQ *index, float *vectors, int n_vectors)
+\end{lstlisting}
+
+Su objetivo es generar el \verb|codebook| (centroides) para cada subespacio.
+El proceso sigue estos pasos:
+\begin{enumerate}
+  \item \textbf{Segregaci\'on}: 
+    Los vectores de entrada se copian en arreglos contiguos de subvectores
+    para mejorar la localidad de datos.
+
+  \item \textbf{K-Means++}: 
+    Para cada subespacio, se inicializan los centroides utilizando el algoritmo 
+    K-Means++\cite{wiki:K-means}, lo que mejora la convergencia respecto a una
+    inicializaci\'on puramente aleatoria.
+
+  % TODO(fede): Mostrar resultados de profiling
+  \item \textbf{Optimizaci\'on BLAS}:
+    El c\'alculo de distancias es uno acelerado, donde la 
+    distancia euclideana (\(L^2\)) se calcula\cite{samuelalbanie}:
+
+\begin{align}
+    d^2(p, q) &= \sum_{i=1}^{n}{(q_i - p_i)^2} 
+    = ||p||_2^2 + ||q||_2^2 - 2p^Tq
+\end{align}
+
+    permitiendo el calculo prematuro de las normas, y luego el producto 
+    matricial de todos los vectores que se tengan que comparar, que en el 
+    calculo de los centroides son multiples pasadas de 
+    \(\textbf{subvectores}\times\textbf{centroides}\).
+    El producto matricial durante el clustering se realiza en 
+    \verb|oj__multiply_vectors_blas|, utilizando la funci'on \verb|sgemm| de
+    BLAS. 
+
+    Adem\'as, se utiliza \(d^2\), ya que 
+    \(d_1 > d_2\) y \(d_1^2 > d_2^2\) son equivalentes para todo \(d_i\) real.
+    
+
+\end{enumerate}
+
+\subsubsection{Adici\'on de Vectores}
+
+\begin{lstlisting}[language=C, caption=Agregar Vectores al \'Indice]
+void index_pq_add(IndexPQ *index, float *vectors, int n_vectors)
+\end{lstlisting}
+
+Una vez entrenado el modelo, esta funci\'on cuantifica los vectores originales.
+Para cada subvector, busca el centroide m\'as cercano en su respectivo
+subespacio utilizando \verb|oj__get_closest_centroid| y almacena exclusivamente
+el \'indice entero de dicho centroide.
+
+\subsubsection{B\'usqueda Vectorial}
+
+\begin{lstlisting}[language=C, caption=Busqueda Vectorial]
+IndexPQ_SearchResult index_pq_search(
+  IndexPQ *index,
+  float *vectors,
+  int n_vectors,
+  int n_neighbours)
+\end{lstlisting}
+
+Implementa el m\'etodo de Distancia Asim\'etrica (ADC).
+En lugar de decodificar los vectores almacenados, el algoritmo:
+\begin{enumerate}
+  \item Genera una \textbf{tabla de b\'usqueda de distancias} 
+    entre el vector de consulta y todos los centroides del \textit{codebook}.
+  \item Calcula la distancia aproximada sumando los valores pre-calculados
+    en la tabla bas\'andose en los \'indices almacenados.
+  \item Mantiene un conjunto de los $k$ vecinos m\'as cercanos mediante una
+    inserci\'on ordenada.
+\end{enumerate}
+
+\subsection{Gesti\'on de Memoria y Portabilidad}
+
+Se utiliz\'o asignaci\'on de memoria alineada (\verb|oj__aligned_alloc|) donde 
+fuese necesario para poder ultilizar \verb|sgemm|, y mantener una velocidad de
+ejecuci\'on razonable.
+
+

@@ -1,0 +1,118 @@
+\documentclass[12pt, a4paper]{article}
+\usepackage[utf8]{inputenc}
+\usepackage[spanish]{babel}
+\usepackage{amsmath}
+\usepackage{amsfonts}
+\usepackage{amssymb}
+\usepackage{graphicx}
+\usepackage{geometry}
+\usepackage{booktabs}
+\usepackage{hyperref}
+\usepackage{dirtree}
+\usepackage{tabularx}
+
+% Code listings 
+\usepackage{listings}
+\usepackage{xcolor}
+
+% Code listings style 
+\definecolor{codegreen}{rgb}{0,0.6,0}
+\definecolor{codegray}{rgb}{0.5,0.5,0.5}
+\definecolor{codepurple}{rgb}{0.58,0,0.82}
+\definecolor{backcolour}{rgb}{0.95,0.95,0.92}
+\lstdefinestyle{mystyle}{
+    backgroundcolor=\color{backcolour},   
+    commentstyle=\color{codegreen},
+    keywordstyle=\color{magenta},
+    numberstyle=\tiny\color{codegray},
+    stringstyle=\color{codepurple},
+    basicstyle=\ttfamily\footnotesize,
+    breakatwhitespace=false,         
+    breaklines=true,                 
+    captionpos=b,                    
+    keepspaces=true,                 
+    % numbers=left,                    
+    % numbersep=5pt,                  
+    showspaces=false,                
+    showstringspaces=false,
+    showtabs=false,                  
+    tabsize=2
+}
+\lstset{style=mystyle}
+\renewcommand{\lstlistingname}{Algoritmo}
+
+% Diagrams
+\usepackage{tikz}
+\usepackage{etoolbox}
+\usepackage{pgfplots}
+\usepackage{ifthen}
+\pgfplotsset{compat=1.12}
+
+\usetikzlibrary{decorations}
+\usetikzlibrary{decorations.pathreplacing}
+\usetikzlibrary{calc}
+\usetikzlibrary{positioning}
+\usetikzlibrary{arrows}
+\usetikzlibrary{matrix}
+\usetikzlibrary{fit}
+
+\usepackage[table]{xcolor}
+\usepackage{caption}
+\usepackage{array}
+
+\usepackage[numbers]{natbib}
+
+\hypersetup{
+    colorlinks=true,
+    linkcolor=blue,
+    filecolor=magenta,      
+    urlcolor=blue,
+    citecolor=blue,
+    pdftitle={Overleaf Example},
+    pdfpagemode=FullScreen,
+}
+
+\title{
+    {Trabajo CBD} \\
+    {\large \'Indice de B\'usqueda Vectorial con Cuantificaci\'on de Productos}
+}
+
+\author{Federico Vareika}
+\date{2026}
+
+\begin{document}
+
+\maketitle
+
+\newpage
+
+\include{Introduccion.tex}
+
+\newpage
+
+\include{Algoritmo.tex}
+
+\newpage 
+
+\include{Implementacion.tex}
+
+\newpage 
+
+\include{ManualDeUso.tex}
+
+\newpage 
+
+\include{Limitaciones.tex}
+
+\newpage 
+
+\include{Conclusion.tex}
+
+\newpage 
+
+\bibliographystyle{plain} 
+\bibliography{Referencias}
+
+\end{document}
+
+

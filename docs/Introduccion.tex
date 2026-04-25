@@ -1,0 +1,27 @@
+\section{Introducci\'on}
+
+En este trabajo se busca investigar e implementar un m\'etodo de busqueda
+vectorial usada en las bases de datos vectoriales. 
+Para esto, se tom\'o como referencia la librer\'ia popular de busqueda vectorial 
+FAISS \cite{faiss_gh}, especialmente un m\'etodo de b\'usqueda 
+de vecino m\'as cercano (NNS, Nearest Neighbour Search) con cuantificacio\'on
+de productos (PQ) \cite{pqnns} que citan en sus
+\href{https://faiss.ai/index.html}{docs}.
+
+El motivo de este trabajo es comprender la escencia en la b\'usqueda 
+sem\'antica, una herramienta que permite a la computadora derivar significado
+de palabras y oraciones, junto con la optimizaci\'on espacial que aporta el 
+algoritmo implementado.
+
+Ademas, la implementaci\'on esta hecha en C, en un solo documento
+\verb|jumpsuit.h|\footnote{El nombre 'jumpsuit' y 'orange-jumpsuit' son por la
+vestimenta del personaje 'Vector' en la pelicula 'Mi Villano Favorito'},
+con minimas dependencias, para que un usuario de la librer\'ia pueda copiar 
+y pegar el documento en su proyecto sin mayor problema. 
+Tambi\'en se provee un wrapper de Python para que se pueda usar como reemplazo 
+b\'asico del wrapper de python que provee FAISS. 
+Dados estos objetivos de experiencia de usuario, y el tiempo de desarrollo, 
+la librer\'ia es limitada, en aspectos de funcionalidad y eficiencia (memoria y 
+velocidad).
+
+
